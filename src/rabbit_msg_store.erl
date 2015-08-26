@@ -424,6 +424,15 @@
 %% For notes on Clean Shutdown and startup, see documentation in
 %% variable_queue.
 
+%% 消息是顺序增加到当前文件中，当文件写满的时候，就创建出一个新文件来
+%% 保存消息
+%% 我们还要用ets来保存文件的元信息
+%% 消费消息，会让文件产生部分空洞，所以需要合并
+%% 当一个文件中所有的消息都被消费完了，可以直接删除掉了
+%% 当消息存储文件不为空的时候，我们启动了rabbit
+%% rabbit会重建FileSummary和Index的ets
+%% 并且倾向宁可消息重复，也不可消息丢失，所以消费者去重消息很重要
+
 %%----------------------------------------------------------------------------
 %% public API
 %%----------------------------------------------------------------------------
@@ -464,7 +473,7 @@ client_delete_and_terminate(CState = #client_msstate { client_ref = Ref }) ->
     ok = server_cast(CState, {client_delete, Ref}).
 
 client_ref(#client_msstate { client_ref = Ref }) -> Ref.
-
+%%流控写入
 write_flow(MsgId, Msg, CState = #client_msstate { server = Server }) ->
     credit_flow:send(whereis(Server), ?CREDIT_DISC_BOUND),
     client_write(MsgId, Msg, flow, CState).
@@ -1027,7 +1036,7 @@ write_action({_Mask, #msg_location { ref_count = RefCount, file = File }},
     %% We already know about it, just update counter. Only update
     %% field otherwise bad interaction with concurrent GC
     {confirm, File, State}.
-
+%向磁盘写入
 write_message(MsgId, Msg, CRef,
               State = #msstate { cur_file_cache_ets = CurFileCacheEts }) ->
     case write_action(should_mask_action(CRef, MsgId, State), MsgId, State) of
@@ -1087,7 +1096,8 @@ remove_message(MsgId, CRef,
                      State
             end
     end.
-
+%% 真正的写盘，更新索引
+%% RabbitMQ的策略是能不写就不写
 write_message(MsgId, Msg,
               State = #msstate { current_file_handle = CurHdl,
                                  current_file        = CurFile,

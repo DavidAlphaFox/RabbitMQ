@@ -1300,7 +1300,7 @@ remove_queue_entries1(
 %%----------------------------------------------------------------------------
 %% Internal gubbins for publishing
 %%----------------------------------------------------------------------------
-
+%% 消息可能需要向磁盘同步
 maybe_write_msg_to_disk(_Force, MsgStatus = #msg_status {
                                   msg_on_disk = true }, _MSCState) ->
     MsgStatus;
