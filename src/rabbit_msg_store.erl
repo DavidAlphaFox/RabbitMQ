@@ -1715,7 +1715,7 @@ build_index_worker(Gatherer, State = #msstate { dir = Dir },
 %%----------------------------------------------------------------------------
 %% garbage collection / compaction / aggregation -- internal
 %%----------------------------------------------------------------------------
-
+%% 当旧的消息文件写满了的时候，我们要开一个新的文件
 maybe_roll_to_new_file(
   Offset,
   State = #msstate { dir                 = Dir,
@@ -1744,7 +1744,7 @@ maybe_roll_to_new_file(
                                     current_file        = NextFile });
 maybe_roll_to_new_file(_, State) ->
     State.
-
+%%看看是否需要合并下消息文件
 maybe_compact(State = #msstate { sum_valid_data        = SumValid,
                                  sum_file_size         = SumFileSize,
                                  gc_pid                = GCPid,
