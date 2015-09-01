@@ -880,7 +880,7 @@ ensure_stats_timer(State) ->
     State.
 
 %%--------------------------------------------------------------------------
-
+%% 用来处理channel0的控制信息
 handle_method0(MethodName, FieldsBin,
                State = #v1{connection = #connection{protocol = Protocol}}) ->
     try
