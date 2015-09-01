@@ -13,7 +13,9 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% rabbit_reader并非标准的GenServer
+%% 它使用proc_lib开启进程
+%% 负责处理接入的Socket的所有数据包
 -module(rabbit_reader).
 -include("rabbit_framing.hrl").
 -include("rabbit.hrl").
@@ -203,7 +205,7 @@ socket_op(Sock, Fun) ->
                            rabbit_net:fast_close(Sock),
                            exit(normal)
     end.
-
+%% 自己要处理trap_exit
 start_connection(Parent, HelperSup, Deb, Sock, SockTransform) ->
     process_flag(trap_exit, true),
     Name = case rabbit_net:connection_string(Sock, inbound) of
@@ -282,13 +284,15 @@ run({M, F, A}) ->
     try apply(M, F, A)
     catch {become, MFA} -> run(MFA)
     end.
-
+%% 接收数据尾递归循环
+%% run第一次会调用recvloop
 recvloop(Deb, Buf, BufLen, State = #v1{pending_recv = true}) ->
     mainloop(Deb, Buf, BufLen, State);
 recvloop(Deb, Buf, BufLen, State = #v1{connection_state = blocked}) ->
     mainloop(Deb, Buf, BufLen, State);
 recvloop(Deb, Buf, BufLen, State = #v1{connection_state = {become, F}}) ->
     throw({become, F(Deb, Buf, BufLen, State)});
+%% 第一次调用recvloop的时候，应当匹配到该规则上
 recvloop(Deb, Buf, BufLen, State = #v1{sock = Sock, recv_len = RecvLen})
   when BufLen < RecvLen ->
     case rabbit_net:setopts(Sock, [{active, once}]) of
@@ -312,7 +316,9 @@ binlist_split(Len, L, [Acc0|Acc]) when Len < 0 ->
     {[H|L], [T|Acc]};
 binlist_split(Len, [H|T], Acc) ->
     binlist_split(Len - size(H), T, [H|Acc]).
-
+%% 主循环
+%% rabbit_net:recv是一段receive
+%% 用来接收socket的信息
 mainloop(Deb, Buf, BufLen, State = #v1{sock = Sock}) ->
     case rabbit_net:recv(Sock) of
         {data, Data} ->
