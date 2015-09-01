@@ -27,7 +27,10 @@
 %% receiver it will not grant any more credit to its senders when it
 %% is itself blocked - thus the only processes that need to check
 %% blocked/0 are ones that read from network sockets.
-
+%% 流量控制，防止一个进程的消息队列被爆
+%% Erlang的消息队列匹配算法是M * N的
+%% M种模式 ＊ 长度为N的队列，时间消耗非常严重
+%% 只有这样才能保证消息的顺序和从上倒下的匹配顺序
 -define(DEFAULT_CREDIT, {200, 50}).
 
 -export([send/1, send/2, ack/1, ack/2, handle_bump_msg/1, blocked/0, state/0]).
