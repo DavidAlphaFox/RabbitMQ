@@ -56,7 +56,8 @@
 -endif.
 
 %%----------------------------------------------------------------------------
-
+%% 利用Erlang的进程字典来做限流
+%% 性能非常高
 %% process dict update macro - eliminates the performance-hurting
 %% closure creation a HOF would introduce
 -define(UPDATE(Key, Default, Var, Expr),
@@ -84,6 +85,9 @@
 %% For any given pair of processes, ack/2 and send/2 must always be
 %% called with the same credit_spec().
 
+%% 更新流量
+%% 如果流量数不为1，则更新流量，并准许发送消息
+%% 如果数量为1，则进行限流
 send(From) -> send(From, ?DEFAULT_CREDIT).
 
 send(From, {InitialCredit, _MoreCreditAfter}) ->
@@ -108,7 +112,8 @@ handle_bump_msg({From, MoreCredit}) ->
                                                     C + MoreCredit;
                true                              -> C + MoreCredit
             end).
-
+%% 如果读取credit_blocked
+%% 如果存在数据且不为空则处在block状态
 blocked() -> case get(credit_blocked) of
                  undefined -> false;
                  []        -> false;
@@ -126,7 +131,9 @@ state() -> case blocked() of
                                          end
                         end
            end.
-
+%% 当一个Peer消失的时候
+%% 我们需要清理一个Peer在当前进程字典上的数据
+%% Peer有可能是From也有可能是To，所以都要清理
 peer_down(Peer) ->
     %% In theory we could also remove it from credit_deferred here, but it
     %% doesn't really matter; at some point later we will drain
@@ -137,14 +144,16 @@ peer_down(Peer) ->
     ok.
 
 %% --------------------------------------------------------------------------
-
+%% 如果没有限制，直接给To进程发送消息
+%% 告诉To进程，有Credit可用
 grant(To, Quantity) ->
     Msg = {bump_credit, {self(), Quantity}},
     case blocked() of
         false -> To ! Msg;
         true  -> ?UPDATE(credit_deferred, [], Deferred, [{To, Msg} | Deferred])
     end.
-
+%% 如果请求已经被Block了，就直接结束
+%% 没有被Block，则放入进程字典中
 block(From) ->
     case blocked() of
         false -> put(credit_blocked_at, erlang:now());

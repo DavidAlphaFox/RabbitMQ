@@ -718,7 +718,7 @@ handle_frame(_Type, _Channel, _Payload, State) when ?IS_STOPPING(State) ->
     State;
 handle_frame(Type, Channel, Payload, State) ->
     unexpected_frame(Type, Channel, Payload, State).
-
+%% 处理帧
 process_frame(Frame, Channel, State) ->
     ChKey = {channel, Channel},
     case (case get(ChKey) of

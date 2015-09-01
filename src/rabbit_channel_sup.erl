@@ -44,7 +44,7 @@
 -endif.
 
 %%----------------------------------------------------------------------------
-
+%% 创建一个RabbitChannel
 start_link({tcp, Sock, Channel, FrameMax, ReaderPid, ConnName, Protocol, User,
             VHost, Capabilities, Collector}) ->
     {ok, SupPid} = supervisor2:start_link(

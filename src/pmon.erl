@@ -13,7 +13,8 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2011-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% RabbitMQ自定义的监控模块
+%% 用dict来保存Monitor相关的信息
 -module(pmon).
 
 -export([new/0, new/1, monitor/2, monitor_all/2, demonitor/2,

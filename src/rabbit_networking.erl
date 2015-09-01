@@ -266,7 +266,7 @@ tcp_listener_addresses({_Host, Port, _Family0}) ->
 tcp_listener_addresses_auto(Port) ->
     lists:append([tcp_listener_addresses(Listener) ||
                      Listener <- port_to_listeners(Port)]).
-
+%% 构建Rabbit的监听sup
 tcp_listener_spec(NamePrefix, {IPAddress, Port, Family}, SocketOpts,
                   Protocol, Label, OnConnect) ->
     {rabbit_misc:tcp_name(NamePrefix, IPAddress, Port),
@@ -276,7 +276,8 @@ tcp_listener_spec(NamePrefix, {IPAddress, Port, Family}, SocketOpts,
        {?MODULE, tcp_listener_stopped, [Protocol]},
        OnConnect, Label]},
      transient, infinity, supervisor, [tcp_listener_sup]}.
-
+%% 常规的tcp端口监听
+%% 当链接建立的时候，调用{?MODULE, start_client, []}
 start_tcp_listener(Listener) ->
     start_listener(Listener, amqp, "TCP Listener",
                    {?MODULE, start_client, []}).
@@ -344,7 +345,13 @@ node_listeners(Node) ->
 
 on_node_down(Node) ->
     ok = mnesia:dirty_delete(rabbit_listener, Node).
-
+%% 创建一个rabbit_connection_sup进程
+%% 创建一个rabbit_connection_helper_sup进程
+%% 创建一个rabbit_reader进程
+%% 其中rabbit_connection_sup监控rabbit_connection_helper_sup和rabbit_reader
+%% 稍后的过程中rabbit_connection_helper_sup
+%% 可以创建rabbit_channel_sup_sup和rabbit_queue_collector
+%% 将Socket的权限交给rabbit_reader进程
 start_client(Sock, SockTransform) ->
     {ok, _Child, Reader} = supervisor:start_child(rabbit_tcp_client_sup, []),
     ok = rabbit_net:controlling_process(Sock, Reader),

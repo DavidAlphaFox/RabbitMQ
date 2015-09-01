@@ -129,7 +129,7 @@ do(Pid, Method) ->
 
 do(Pid, Method, Content) ->
     gen_server2:cast(Pid, {method, Method, Content, noflow}).
-
+%% 通过流控向某个PID发送方法和内容
 do_flow(Pid, Method, Content) ->
     credit_flow:send(Pid),
     gen_server2:cast(Pid, {method, Method, Content, flow}).
@@ -315,7 +315,9 @@ handle_call({declare_fast_reply_to, Key}, _From,
 
 handle_call(_Request, _From, State) ->
     noreply(State).
-
+%% PID收到消息后
+%% flow会ack相应的Reader
+%% 相当对Reader进行限流
 handle_cast({method, Method, Content, Flow},
             State = #ch{reader_pid   = Reader,
                         virtual_host = VHost}) ->
@@ -426,7 +428,8 @@ handle_cast({confirm, MsgSeqNos, QPid}, State = #ch{unconfirmed = UC}) ->
     {MXs, UC1} = dtree:take(MsgSeqNos, QPid, UC),
     %% NB: don't call noreply/1 since we don't want to send confirms.
     noreply_coalesce(record_confirms(MXs, State#ch{unconfirmed = UC1})).
-
+%% 当前进程收到了bump_credit消息
+%% 释放相应数量的credit
 handle_info({bump_credit, Msg}, State) ->
     credit_flow:handle_bump_msg(Msg),
     noreply(State);
@@ -1370,7 +1373,7 @@ basic_consume(QueueName, NoAck, ConsumerPrefetch, ActualConsumerTag,
 
 maybe_stat(false, Q) -> rabbit_amqqueue:stat(Q);
 maybe_stat(true, _Q) -> {ok, 0, 0}.
-
+%% 监控消费者进程
 consumer_monitor(ConsumerTag,
                  State = #ch{consumer_mapping = ConsumerMapping,
                              queue_monitors   = QMons,

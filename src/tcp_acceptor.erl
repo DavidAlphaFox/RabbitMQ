@@ -96,7 +96,7 @@ accept(State = #state{sock=LSock}) ->
         {ok, Ref} -> {noreply, State#state{ref=Ref}};
         Error     -> {stop, {cannot_accept, Error}, State}
     end.
-
+%% 调整socket的水位线
 tune_buffer_size(Sock) ->
     case inet:getopts(Sock, [sndbuf, recbuf, buffer]) of
         {ok, BufSizes} -> BufSz = lists:max([Sz || {_Opt, Sz} <- BufSizes]),
