@@ -16,6 +16,8 @@
 %% rabbit_reader并非标准的GenServer
 %% 它使用proc_lib开启进程
 %% 负责处理接入的Socket的所有数据包
+%% RabbitMQ的channel 0是控制channel
+%% RabbitMQ用一条TCP链接，上面包含多个channel
 -module(rabbit_reader).
 -include("rabbit_framing.hrl").
 -include("rabbit.hrl").
@@ -279,7 +281,7 @@ start_connection(Parent, HelperSup, Deb, Sock, SockTransform) ->
         rabbit_event:notify(connection_closed, [{pid, self()}])
     end,
     done.
-
+%% become用于协议升级用的
 run({M, F, A}) ->
     try apply(M, F, A)
     catch {become, MFA} -> run(MFA)
@@ -293,6 +295,7 @@ recvloop(Deb, Buf, BufLen, State = #v1{connection_state = blocked}) ->
 recvloop(Deb, Buf, BufLen, State = #v1{connection_state = {become, F}}) ->
     throw({become, F(Deb, Buf, BufLen, State)});
 %% 第一次调用recvloop的时候，应当匹配到该规则上
+%% 第一个callback是handshake，recv_len为8字节
 recvloop(Deb, Buf, BufLen, State = #v1{sock = Sock, recv_len = RecvLen})
   when BufLen < RecvLen ->
     case rabbit_net:setopts(Sock, [{active, once}]) of
@@ -300,6 +303,8 @@ recvloop(Deb, Buf, BufLen, State = #v1{sock = Sock, recv_len = RecvLen})
                                     State#v1{pending_recv = true});
         {error, Reason} -> stop(Reason, State)
     end;
+%% 第二次调用会调用该处
+%% handshake是一个block的过程，不存在粘包问题
 recvloop(Deb, [B], _BufLen, State) ->
     {Rest, State1} = handle_input(State#v1.callback, B, State),
     recvloop(Deb, [Rest], size(Rest), State1);
@@ -796,8 +801,10 @@ handle_input({frame_payload, Type, Channel, PayloadSize}, Data, State) ->
         _          -> fatal_frame_error({invalid_frame_end_marker, EndMarker},
                                         Type, Channel, Payload, State)
     end;
+%% 握手成功
 handle_input(handshake, <<"AMQP", A, B, C, D, Rest/binary>>, State) ->
     {Rest, handshake({A, B, C, D}, State)};
+%% 握手失败
 handle_input(handshake, <<Other:8/binary, _/binary>>, #v1{sock = Sock}) ->
     refuse_connection(Sock, {bad_header, Other});
 handle_input(Callback, Data, _State) ->
