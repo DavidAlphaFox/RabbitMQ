@@ -19,6 +19,17 @@
 %% 我们可以想像一下，如果队列处在高负载状态中（收发消息）多
 %% 频繁的FULL GC会影响整个队列的效率，尤其是一个Erlang进程
 %% 消耗了大量的内存，但是垃圾量非常少
+%% GC的时间消耗的越久，越有可能推迟下次GC的时间
+%% 如果GC的时间非常短，那么就会GC的越频繁
+
+%% GC时间短的情况，
+%% 1.进程非常少，垃圾也非常少（生产的快，消耗的也快）
+%% 2.进程非常多，但是处在停顿状态的进程非常少（生产和消费者多，搞吞吐状态，生产消费都快）
+%% 3.进程非常多，垃圾非常少 （生产和消费者多，生产消费都非常少）
+%% GC时间长的情况
+%% 1.进程非常少，垃圾非常多 （生产快，消费者慢）
+%% 2.进程非常多，垃圾非常多 （生产快，消费的慢，生产者和消费者都非常多）
+%% 3.进程多，处在休眠的非常多 （生产者消费者多，但是消息频率比较低）
 -module(background_gc).
 
 -behaviour(gen_server2).
@@ -78,7 +89,7 @@ interval_gc(State = #state{last_interval = LastInterval}) ->
                        ?MAX_RATIO, ?IDEAL_INTERVAL, LastInterval),
     erlang:send_after(Interval, self(), run),
     State#state{last_interval = Interval}.
-
+%% 对处在暂停状态的进程进行FULL GC
 gc() ->
     [garbage_collect(P) || P <- processes(),
                            {status, waiting} == process_info(P, status)],
