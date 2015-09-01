@@ -378,8 +378,12 @@
 %% [Levy 2008] The Complexity of Reliable Distributed Storage, 2008.
 %% [Marandi et al 2010] Ring Paxos: A High-Throughput Atomic Broadcast
 %% Protocol
-
-
+%% 一个非常高端大气的广播模块
+%% 可以保证在一个消息的生命周期内，全都广播到
+%% 只保证一个进程按顺序广播，接收者能顺序收到
+%% 不保证所有进程同时广播消息，能按顺序收到
+%% 用于RabbitMQ的mirror queue，RabbitMQ高可用部分
+%% 某种意义上和Paxos很类似，参考问论文提到了
 -behaviour(gen_server2).
 
 -export([create_tables/0, start_link/4, leave/1, broadcast/2, broadcast/3,
@@ -547,7 +551,8 @@ forget_group(GroupName) ->
                              mnesia:delete({?GROUP_TABLE, GroupName})
                      end),
     ok.
-
+%% 启动后让自己加入到这个组当中
+%% 同时让自己进入hibernate状态
 init([GroupName, Module, Args, TxnFun]) ->
     put(process_name, {?MODULE, GroupName}),
     {MegaSecs, Secs, MicroSecs} = now(),
@@ -965,7 +970,7 @@ flush_broadcast_buffer(State = #state { self             = Self,
 needs_view_update(ReqVer, {Ver, _View}) -> Ver < ReqVer.
 
 view_version({Ver, _View}) -> Ver.
-
+%%简单的判断函数
 is_member_alive({dead, _Member}) -> false;
 is_member_alive(_)               -> true.
 
@@ -1053,7 +1058,7 @@ ensure_alive_suffix1(MembersQ) ->
 %% ---------------------------------------------------------------------------
 %% View modification
 %% ---------------------------------------------------------------------------
-
+%%添加进程到Group中
 join_group(Self, GroupName, TxnFun) ->
     join_group(Self, GroupName, dirty_read_group(GroupName), TxnFun).
 
@@ -1109,9 +1114,9 @@ read_group(GroupName) ->
         []      -> {error, not_found};
         [Group] -> Group
     end.
-
+%% 直接在Mnesia写入一个Group
 write_group(Group) -> mnesia:write(?GROUP_TABLE, Group, write), Group.
-
+%% 完全重建一个Group
 prune_or_create_group(Self, GroupName, TxnFun) ->
     TxnFun(
       fun () ->
@@ -1122,6 +1127,8 @@ prune_or_create_group(Self, GroupName, TxnFun) ->
                   {error, not_found} ->
                       write_group(GroupNew);
                   Group = #gm_group { members = Members } ->
+                  		%% 开干之前先检查下这Group是否还有活着的进程
+                  		%% 防止误伤
                       case lists:any(fun is_member_alive/1, Members) of
                           true  -> Group;
                           false -> write_group(GroupNew)
@@ -1197,7 +1204,7 @@ maybe_erase_aliases(State = #state { self          = Self,
 can_erase_view_member(Self, Self, _LA, _LP) -> false;
 can_erase_view_member(_Self, _Id,   N,   N) -> true;
 can_erase_view_member(_Self, _Id, _LA, _LP) -> false.
-
+%% 向邻居进行广播
 neighbour_cast(N, Msg) -> ?INSTR_MOD:cast(get_pid(N), Msg).
 neighbour_call(N, Msg) -> ?INSTR_MOD:call(get_pid(N), Msg, infinity).
 
@@ -1224,7 +1231,8 @@ ensure_neighbour(Ver, Self, {RealNeighbour, MRef}, Neighbour) ->
 
 maybe_monitor( Self,  Self) -> undefined;
 maybe_monitor(Other, _Self) -> ?INSTR_MOD:monitor(get_pid(Other)).
-
+%% 和相邻的节点联系下
+%% 问候下大哥们，你们啥情况
 check_neighbours(State = #state { self             = Self,
                                   left             = Left,
                                   right            = Right,
@@ -1233,6 +1241,7 @@ check_neighbours(State = #state { self             = Self,
     #view_member { left = VLeft, right = VRight }
         = fetch_view_member(Self, View),
     Ver = view_version(View),
+    %%找出自己左边和右边的邻居
     Left1 = ensure_neighbour(Ver, Self, Left, VLeft),
     Right1 = ensure_neighbour(Ver, Self, Right, VRight),
     Buffer1 = case Right1 of
@@ -1325,7 +1334,7 @@ store_member(Id, MemberState, MembersState) ->
 prepare_members_state(MembersState) -> ?DICT:to_list(MembersState).
 
 build_members_state(MembersStateList) -> ?DICT:from_list(MembersStateList).
-
+%% 从Mnesia中找到组的版本
 make_member(GroupName) ->
    {case dirty_read_group(GroupName) of
         #gm_group { version = Version } -> Version;

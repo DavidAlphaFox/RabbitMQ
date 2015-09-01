@@ -1003,6 +1003,13 @@ base64url(In) ->
 %% more then you want to run it less often. So we time how long it
 %% takes to run, and then suggest how long you should wait before
 %% running it again. Times are in millis.
+%% 计算一个函数操作时间，然后计算出一个合适的再操作的时间间隔
+%% 默认情况下我们想让函数每隔IdealInterval就执行一次
+%% 但是我们又不想函数执行超过MaxRatio ＊ IdealInterval 
+%% 如果超过了这个时间但是不超过LastInterval，则将LastInterval作为下次触发的时间间隔
+%% 如果超过了LastInterval也超过了MaxRatio ＊ IdealInterval  则将LastInterval＊1.5作为下次
+%% 触发的间隔
+%% 如果两个都没超过则，选出IdealInterval和LastInterval / 1.5 两者之间的最大值
 interval_operation({M, F, A}, MaxRatio, IdealInterval, LastInterval) ->
     {Micros, Res} = timer:tc(M, F, A),
     {Res, case {Micros > 1000 * (MaxRatio * IdealInterval),

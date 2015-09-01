@@ -13,7 +13,12 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% RabbitMQ做为一个消息队列，很多时候需要消耗大量的内存
+%% 适当的时候，就要手动的进行GC
+%% 这样才能保证整个队列的性能平稳
+%% 我们可以想像一下，如果队列处在高负载状态中（收发消息）多
+%% 频繁的FULL GC会影响整个队列的效率，尤其是一个Erlang进程
+%% 消耗了大量的内存，但是垃圾量非常少
 -module(background_gc).
 
 -behaviour(gen_server2).
