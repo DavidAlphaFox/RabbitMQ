@@ -854,7 +854,7 @@ handle_method(#'basic.get'{queue = QueueNameBin, no_ack = NoAck},
         empty ->
             {reply, #'basic.get_empty'{}, State}
     end;
-
+%% 消费者
 handle_method(#'basic.consume'{queue        = <<"amq.rabbitmq.reply-to">>,
                                consumer_tag = CTag0,
                                no_ack       = NoAck,

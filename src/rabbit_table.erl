@@ -65,7 +65,8 @@ create_local_copy(disc) ->
 create_local_copy(ram)  ->
     create_local_copies(ram),
     create_local_copy(schema, ram_copies).
-
+%% 先去除掉所有是local_content的表
+%% 剩余的表进行等待
 wait_for_replicated() ->
     wait([Tab || {Tab, TabDef} <- definitions(),
                  not lists:member({local_content, true}, TabDef)]).
@@ -85,7 +86,7 @@ wait(TableNames) ->
         {error, Reason} ->
             throw({error, {failed_waiting_for_tables, Reason}})
     end.
-
+%% 强制重新加载所有表文件
 force_load() -> [mnesia:force_load_table(T) || T <- names()], ok.
 
 is_present() -> names() -- mnesia:system_info(tables) =:= [].
@@ -97,9 +98,11 @@ needs_default_data() -> is_empty([rabbit_user, rabbit_user_permission,
 is_empty(Names) ->
     lists:all(fun (Tab) -> mnesia:dirty_first(Tab) == '$end_of_table' end,
               Names).
-
+%% 检查schema的一致性
 check_schema_integrity() ->
     Tables = mnesia:system_info(tables),
+    %% 先检查表名字
+    %% 再检查mnesia表的属性
     case check(fun (Tab, TabDef) ->
                        case lists:member(Tab, Tables) of
                            false -> {error, {table_missing, Tab}};
@@ -168,7 +171,8 @@ check_attributes(Tab, TabDef) ->
         ExpAttrs -> ok;
         Attrs    -> {error, {table_attributes_mismatch, Tab, ExpAttrs, Attrs}}
     end.
-
+%% 通过一次dirty和一次match进行数据比对
+%% 如果数据内容一致，那么说明同步成功
 check_content(Tab, TabDef) ->
     {_, Match} = proplists:lookup(match, TabDef),
     case mnesia:dirty_first(Tab) of

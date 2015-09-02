@@ -13,6 +13,9 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
+%% RabbitMQ 对Mnesia的操作做了很多封装
+%% 是RabbitMQ中非常有价值的模块
+%% 但也是RabbitMQ中出了错误不好解决的模块
 
 -module(rabbit_mnesia).
 
@@ -98,8 +101,14 @@
 %%----------------------------------------------------------------------------
 
 init() ->
+%% 确保mnesia启动
     ensure_mnesia_running(),
+%% 确保mnesia的目录存在
+%% 从代码上可以看出是通过filelib判断目录路径是否存在
     ensure_mnesia_dir(),
+%% 通过判断文件是否存在
+%% 和比对节点状态来判断
+%% 判断该节点是全新的节点
     case is_virgin_node() of
         true  -> init_from_config();
         false -> NodeType = node_type(),
@@ -109,12 +118,15 @@ init() ->
     %% We intuitively expect the global name server to be synced when
     %% Mnesia is up. In fact that's not guaranteed to be the case -
     %% let's make it so.
+    %% 让global强制进行一次同步
     ok = global:sync(),
     ok.
-
+%% 从0开始构建一个集群
 init_from_config() ->
     {TryNodes, NodeType} =
         case application:get_env(rabbit, cluster_nodes) of
+          %% 如果自己在节点列表中
+          %% 则类型是磁盘节点，否则是内存节点
             {ok, Nodes} when is_list(Nodes) ->
                 Config = {Nodes -- [node()], case lists:member(node(), Nodes) of
                                                  true  -> disc;
@@ -132,6 +144,7 @@ init_from_config() ->
                 Config
         end,
     case TryNodes of
+      %%  只有自己一个节点，那么强制当前节点为磁盘节点
         [] -> init_db_and_upgrade([node()], disc, false);
         _  -> auto_cluster(TryNodes, NodeType)
     end.
@@ -426,7 +439,9 @@ dir() -> mnesia:system_info(directory).
 %% schema if there is the need to and catching up if there are other
 %% nodes in the cluster already. It also updates the cluster status
 %% file.
+%% 初始化数据库
 init_db(ClusterNodes, NodeType, CheckOtherNodes) ->
+%% 先和其它的节点建立起链接
     Nodes = change_extra_db_nodes(ClusterNodes, CheckOtherNodes),
     %% Note that we use `system_info' here and not the cluster status
     %% since when we start rabbit for the first time the cluster
@@ -439,15 +454,21 @@ init_db(ClusterNodes, NodeType, CheckOtherNodes) ->
             throw({error, cannot_create_standalone_ram_node});
         {[], false, disc} ->
             %% RAM -> disc, starting from scratch
+            %% 新节点
+            %% 从内存节点变成磁盘节点
             ok = create_schema();
         {[], true, disc} ->
             %% First disc node up
+            %% 单节点重新加载
             maybe_force_load(),
             ok;
         {[_ | _], _, _} ->
             %% Subsequent node in cluster, catch up
+
             maybe_force_load(),
+            %% 等待集群所有的表进行同步
             ok = rabbit_table:wait_for_replicated(),
+            %% 在本地节点上添加相应类型的节点复制
             ok = rabbit_table:create_local_copy(NodeType)
     end,
     ensure_schema_integrity(),
@@ -458,6 +479,7 @@ init_db_unchecked(ClusterNodes, NodeType) ->
     init_db(ClusterNodes, NodeType, false).
 
 init_db_and_upgrade(ClusterNodes, NodeType, CheckOtherNodes) ->
+%% 先初始化集群中所有的节点
     ok = init_db(ClusterNodes, NodeType, CheckOtherNodes),
     ok = case rabbit_upgrade:maybe_upgrade_local() of
              ok                    -> ok;
@@ -534,6 +556,8 @@ force_load_next_boot() ->
     rabbit_file:write_file(force_load_filename(), <<"">>).
 
 maybe_force_load() ->
+  %% 如果存在force_load文件
+  %% 则直接强制加载
     case rabbit_file:is_file(force_load_filename()) of
         true  -> rabbit_table:force_load(),
                  rabbit_file:delete(force_load_filename());
@@ -647,6 +671,7 @@ schema_ok_or_move() ->
 
 %% We only care about disc nodes since ram nodes are supposed to catch
 %% up only
+%% 创建mnesia的schema
 create_schema() ->
     stop_mnesia(),
     rabbit_misc:ensure_ok(mnesia:create_schema([node()]), cannot_create_schema),
@@ -732,6 +757,7 @@ stop_mnesia() ->
     ensure_mnesia_not_running().
 
 change_extra_db_nodes(ClusterNodes0, CheckOtherNodes) ->
+%% 尝试链接其它的节点
     ClusterNodes = nodes_excl_me(ClusterNodes0),
     case {mnesia:change_config(extra_db_nodes, ClusterNodes), ClusterNodes} of
         {{ok, []}, [_|_]} when CheckOtherNodes ->
@@ -833,7 +859,7 @@ is_only_clustered_disc_node() ->
 me_in_nodes(Nodes) -> lists:member(node(), Nodes).
 
 nodes_incl_me(Nodes) -> lists:usort([node()|Nodes]).
-
+%% 将自己从节点列表中排除掉
 nodes_excl_me(Nodes) -> Nodes -- [node()].
 
 e(Tag) -> throw({error, {Tag, error_description(Tag)}}).

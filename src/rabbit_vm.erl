@@ -109,14 +109,14 @@ binary() ->
      {other,               Other}].
 
 %%----------------------------------------------------------------------------
-
+%% 计算Mnesia占用的内存数量
 mnesia_memory() ->
     case mnesia:system_info(is_running) of
         yes -> lists:sum([bytes(mnesia:table_info(Tab, memory)) ||
                              Tab <- mnesia:system_info(tables)]);
         _   -> 0
     end.
-
+%% 计算ets占用的内存数量
 ets_memory(OwnerNames) ->
     Owners = [whereis(N) || N <- OwnerNames],
     lists:sum([bytes(ets:info(T, memory)) || T <- ets:all(),

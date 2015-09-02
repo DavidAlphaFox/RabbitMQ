@@ -176,7 +176,7 @@ internal_update(State = #state { limit   = Limit,
             ok
     end,
     State #state {alarmed = NewAlarmed, actual = CurrentFree}.
-
+%% 通过使用系统命令获得磁盘剩余空间的大小
 get_disk_free(Dir) ->
     get_disk_free(Dir, os:type()).
 
