@@ -368,6 +368,7 @@ cluster_nodes(WhichNodes) -> cluster_status(WhichNodes).
 %% This function is the actual source of information, since it gets
 %% the data from mnesia. Obviously it'll work only when mnesia is
 %% running.
+%% 只有mnesia集群重建或恢复了，才会返回OK的信息
 cluster_status_from_mnesia() ->
     case is_running() of
         false ->
@@ -395,13 +396,14 @@ cluster_status_from_mnesia() ->
                 false -> {error, tables_not_present}
             end
     end.
-
+%% 整个mnesia集群的状态
 cluster_status(WhichNodes) ->
     {AllNodes, DiscNodes, RunningNodes} = Nodes =
         case cluster_status_from_mnesia() of
             {ok, Nodes0} ->
                 Nodes0;
             {error, _Reason} ->
+            %% 如果某些原因，自己没有在Mnesia集群中
                 {AllNodes0, DiscNodes0, RunningNodes0} =
                     rabbit_node_monitor:read_cluster_status(),
                 %% The cluster status file records the status when the node is

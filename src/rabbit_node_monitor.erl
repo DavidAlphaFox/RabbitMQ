@@ -141,7 +141,8 @@ write_cluster_status({All, Disc, Running}) ->
         {_, ok}           -> ok;
         {FN, {error, E2}} -> throw({error, {could_not_write_file, FN, E2}})
     end.
-
+%% 尝试从配置文件
+%% 尝试读取上次关机的时，还处在Running的节点
 read_cluster_status() ->
     case {try_read_file(cluster_status_filename()),
           try_read_file(running_nodes_filename())} of

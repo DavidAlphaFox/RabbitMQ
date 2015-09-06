@@ -143,6 +143,9 @@ maybe_upgrade_mnesia() ->
                      secondary -> secondary_upgrade(AllNodes)
                  end
     end.
+%% 升级的时候
+%% 如果是集群，要确保集群中至少除了自己之外还有一个存活节点
+%% 从这点上来看，集群热升级是个技巧活，所以还是不要集群热升级了
 
 upgrade_mode(AllNodes) ->
     case nodes_running(AllNodes) of

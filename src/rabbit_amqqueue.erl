@@ -13,6 +13,9 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
+%% 队列的业务逻辑代码
+%% 真正的队列是用application env设置的
+%% 
 
 -module(rabbit_amqqueue).
 
@@ -773,6 +776,8 @@ on_node_up(Node) ->
            end).
 
 on_node_down(Node) ->
+%% 找出rabbit_queue中所有Pid是当前节点但是状态不是alive的
+%% 清理掉这些queue
     rabbit_misc:execute_mnesia_tx_with_tail(
       fun () -> QsDels =
                     qlc:e(qlc:q([{QName, delete_queue(QName)} ||
