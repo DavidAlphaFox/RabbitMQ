@@ -13,6 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
+%% 操作代理
 
 -module(delegate).
 
@@ -166,7 +167,8 @@ delegate(Pid, RemoteNodes) ->
                      Name;
         Name      -> Name
     end.
-
+%% 安全invoke，使用try catch
+%% 防止进程异常退出
 safe_invoke(Pids, FunOrMFA) when is_list(Pids) ->
     [safe_invoke(Pid, FunOrMFA) || Pid <- Pids];
 safe_invoke(Pid, FunOrMFA) when is_pid(Pid) ->

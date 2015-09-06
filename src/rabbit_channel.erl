@@ -145,7 +145,7 @@ send_command(Pid, Msg) ->
 
 deliver(Pid, ConsumerTag, AckRequired, Msg) ->
     gen_server2:cast(Pid, {deliver, ConsumerTag, AckRequired, Msg}).
-
+%% 不太理解为什么要用delegate
 deliver_reply(<<"amq.rabbitmq.reply-to.", Rest/binary>>, Delivery) ->
     case decode_fast_reply_to(Rest) of
         {ok, Pid, Key} ->
@@ -177,7 +177,7 @@ declare_fast_reply_to(<<"amq.rabbitmq.reply-to.", Rest/binary>>) ->
     end;
 declare_fast_reply_to(_) ->
     not_found.
-
+%% 找出reply的进程
 decode_fast_reply_to(Rest) ->
     case string:tokens(binary_to_list(Rest), ".") of
         [PidEnc, Key] -> Pid = binary_to_term(base64:decode(PidEnc)),
