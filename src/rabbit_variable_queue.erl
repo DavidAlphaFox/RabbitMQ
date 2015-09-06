@@ -242,6 +242,7 @@
 %% queue_index adds to these terms the details of its segments and
 %% stores the terms in the queue directory.
 %% 为了更快的启动，在停机的时候，我们会将一些状态保存到磁盘上
+%% 会保存index和msg_store以及file_summary中的ets
 %%
 %% Two message stores are used. One is created for persistent messages
 %% to durable queues that must survive restarts, and the other is used
