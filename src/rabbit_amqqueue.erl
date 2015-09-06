@@ -204,11 +204,15 @@
 -define(CONSUMER_INFO_KEYS,
         [queue_name, channel_pid, consumer_tag, ack_required, prefetch_count,
          arguments]).
-
+%% 队列恢复机制
 recover() ->
     %% Clear out remnants of old incarnation, in case we restarted
     %% faster than other nodes handled DOWN messages from us.
+    %% 先清理以前的队列
+    %% 防止快速重启，其它节点还没收到我们DOWN机的消息
+    %% 这个和Erlang的心跳机制相关
     on_node_down(node()),
+    %% 找出所有持久化的队列
     DurableQueues = find_durable_queues(),
     {ok, BQ} = application:get_env(rabbit, backing_queue_module),
 

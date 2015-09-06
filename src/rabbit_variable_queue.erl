@@ -13,7 +13,8 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% 默认配置的队列
+%% rabbit_amqqueue封装的后端
 -module(rabbit_variable_queue).
 
 -export([init/3, terminate/2, delete_and_terminate/2, delete_crashed/1,
@@ -49,7 +50,8 @@
 %% Note that for persistent messages, the message and its position
 %% within the queue are always held on disk, *in addition* to being in
 %% one of the above classifications.
-%%
+%% 对于持久化的消息，消息在队列中的位置，永远要持久化到磁盘上的
+%% 
 %% Also note that within this code, the term gamma seldom
 %% appears. It's frequently the case that gammas are defined by betas
 %% who have had their queue position recorded on disk.
