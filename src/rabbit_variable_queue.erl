@@ -47,6 +47,11 @@
 %%        term, where the messages and their position are only held on
 %%        disk.
 %%
+%% alpha: 消息本身和在队列中的位置，都保存在内存中
+%% beta: 消息本身保存在磁盘上，消息在队列中的位置保存在内存中
+%% gamma: 消息本身存储在磁盘上，消息在队列中的位置同时保存在内存和磁盘上
+%% delta: 消息的集合，用一个标示表示，集合中的消息本身和在队列的位置都保存在磁盘上
+%%
 %% Note that for persistent messages, the message and its position
 %% within the queue are always held on disk, *in addition* to being in
 %% one of the above classifications.
@@ -61,6 +66,9 @@
 %% alphas, q2 and q3 hold both betas and gammas. When a message
 %% arrives, its classification is determined. It is then added to the
 %% rightmost appropriate queue.
+%% 通常情况下，消息移动的顺序是q1 -> q2 -> delta -> q3 -> q4，但是其中很多步骤
+%% 会被忽略掉。q1和q4值保存alpha类型的消息，q2和q3保存beta和gamma类型的消息
+%% 当消息到达的时候，消息将会被判定出类型，并将他们放到合适的队列中。
 %%
 %% If a new message is determined to be a beta or gamma, q1 is
 %% empty. If a new message is determined to be a delta, q1 and q2 are
@@ -72,6 +80,9 @@
 %% delta. If the queue is non empty, either q4 or q3 contain
 %% entries. It is never permitted for delta to hold all the messages
 %% in the queue.
+%% 当我们移除一个消息的时候，q4是空的，那么就从q3直接读取
+%% 如果q3是空的，将读取一个delta消息到q3中
+%% 如果队列不空，不管q3还是q4包含消息项。不准许delta队列持有所有消息。
 %%
 %% The duration indicated to us by the memory_monitor is used to
 %% calculate, given our current ingress and egress rates, how many
@@ -84,6 +95,11 @@
 %% messages closer to the tail of the queue stay in the queue for
 %% longer, thus do not need to be replaced as quickly by sending other
 %% messages to disk.
+%% RabbitMQ通过使用memory_monitor来决定当前的换入和换出率，多少消息要保存
+%% 在内存中,多少消息要保存在磁盘上。我们需要追踪消息和等待ACK的换入换出比率。
+%% 当我们把alpha类的消息变成beta类的消息或者beta类的消息变成gamma类的消息，
+%% 我们倾向将队尾的消息而非队头的消息写入磁盘。
+%% 从侧面反应，我们不应当将大块的消息丢入队列中
 %%
 %% Whilst messages are pushed to disk and forgotten from RAM as soon
 %% as requested by a new setting of the queue RAM duration, the
@@ -120,6 +136,9 @@
 %% consumers. Generally, we want to give Rabbit every chance of
 %% getting rid of messages as fast as possible and remaining
 %% responsive, and using only the egress rate impacts that goal.
+%% 换入率升高，代表有大量的数据进入队列，需要给予队列更多的内存
+%% 让队列能更快的处理消息（少做IO或者延迟做IO操作）。
+%% 通常我们我们是给Rabbit更多机会去转发消息，而不是持久化到本地
 %%
 %% Once the queue has more alphas than the target_ram_count, the
 %% surplus must be converted to betas, if not gammas, if not rolled
@@ -138,6 +157,13 @@
 %% memory, but require additional CPU and disk ops, versus using delta
 %% less and gammas and betas more, which will cost more memory, but
 %% require fewer disk ops and less CPU overhead.
+%% 当消息从alpha变成beta之后，必须先从msg_store中读取出来，才能进行转发
+%% beta和gamma在内存上的消耗是相同的，所以将beta转化成gamma并不会减少内存消耗
+%% 为了进一步减少内存消耗，gamma会被压缩成delta。
+%% 从beta/gamma转化成alpha只需要一次磁盘操作，delta需要两次磁盘操作。
+%% delta基本上可以说0内存消耗。过多的使用delta消息，会消耗非常大的CPU和磁盘IO
+%% 从此处我们可以看到，尽量保证消费者和生产者的平衡性
+%% 同时我们可以猜测到，生产者和消费者的ack是对消息队列的性能有影响的
 %%
 %% In the case of a persistent msg published to a durable queue, the
 %% msg is immediately written to the msg_store and queue_index. If
@@ -147,6 +173,7 @@
 %% transient msgs in it which has more messages than permitted by the
 %% target_ram_count may contain an interspersed mixture of betas and
 %% gammas in q2 and q3.
+%% 当消息写入持久化队列的时候，消息直接写入msg_store和queue_index
 %%
 %% There is then a ratio that controls how many betas and gammas there
 %% can be. This is based on the target_ram_count and thus expresses
@@ -158,7 +185,10 @@
 %% delta/(betas+gammas+delta) equals
 %% (betas+gammas+delta)/(target_ram_count+betas+gammas+delta). I.e. as
 %% the target_ram_count shrinks to 0, so must betas and gammas.
-%%
+%% 这里有一个比率控制beta和gamma的数量
+%% 比率delta/(betas+gammas+delta) == (betas+gammas+delta)/(target_ram_count+betas+gammas+delta)
+%% delta占总消息的比率等于总消息占进程内存消耗的比率
+%% 
 %% The conversion of betas to gammas is done in batches of at least
 %% ?IO_BATCH_SIZE. This value should not be too small, otherwise the
 %% frequent operations on the queues of q2 and q3 will not be
@@ -211,6 +241,7 @@
 %% messages in the queue and references into the msg_stores. The
 %% queue_index adds to these terms the details of its segments and
 %% stores the terms in the queue directory.
+%% 为了更快的启动，在停机的时候，我们会将一些状态保存到磁盘上
 %%
 %% Two message stores are used. One is created for persistent messages
 %% to durable queues that must survive restarts, and the other is used
@@ -399,7 +430,7 @@
 %%----------------------------------------------------------------------------
 %% Public API
 %%----------------------------------------------------------------------------
-
+%% 创建队列
 start(DurableQueues) ->
     {AllTerms, StartFunState} = rabbit_queue_index:start(DurableQueues),
     start_msg_store(
