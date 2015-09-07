@@ -257,6 +257,7 @@ cmd(Command) ->
 %% get_total_memory(OS) -> Total
 %% Windows and Freebsd code based on: memsup:get_memory_usage/1
 %% Original code was part of OTP and released under "Erlang Public License".
+%% 使用系统命令来获得系统的总内存
 
 get_total_memory({unix,darwin}) ->
     File = cmd("/usr/bin/vm_stat"),

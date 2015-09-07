@@ -13,6 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
+%% 磁盘监控
 
 -module(rabbit_disk_monitor).
 
@@ -92,6 +93,7 @@ start_link(Args) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [Args], []).
 
 init([Limit]) ->
+%% 得到RabbitMQ的Mnesia目录
     Dir = dir(),
     State = #state{dir          = Dir,
                    min_interval = ?DEFAULT_MIN_DISK_CHECK_INTERVAL,
@@ -152,14 +154,16 @@ code_change(_OldVsn, State, _Extra) ->
 
 % the partition / drive containing this directory will be monitored
 dir() -> rabbit_mnesia:dir().
-
+%% 设置磁盘限制
+%% 磁盘限制 ＝ 内存总量 * Ratio
 set_disk_limits(State, Limit0) ->
     Limit = interpret_limit(Limit0),
     State1 = State#state { limit = Limit },
     rabbit_log:info("Disk free limit set to ~pMB~n",
                     [trunc(Limit / 1000000)]),
     internal_update(State1).
-
+%% 更新当前的状态
+%% 根据限制发出警报
 internal_update(State = #state { limit   = Limit,
                                  dir     = Dir,
                                  alarmed = Alarmed}) ->
@@ -212,7 +216,8 @@ emit_update_info(StateStr, CurrentFree, Limit) ->
     rabbit_log:info(
       "Disk free space ~s. Free bytes:~p Limit:~p~n",
       [StateStr, CurrentFree, Limit]).
-
+%% 开启一个定时器
+%% 定时发送update的信息
 start_timer(State) ->
     State#state{timer = erlang:send_after(interval(State), self(), update)}.
 
