@@ -13,6 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
+%% RabbitMQ的Erlang节点监控
 
 -module(rabbit_node_monitor).
 
@@ -99,7 +100,7 @@ running_nodes_filename() ->
 
 cluster_status_filename() ->
     rabbit_mnesia:dir() ++ "/cluster_nodes.config".
-
+%% 准备Cluster的状态文件
 prepare_cluster_status_files() ->
     rabbit_mnesia:ensure_mnesia_dir(),
     Corrupt = fun(F) -> throw({error, corrupt_cluster_status_files, F}) end,
@@ -126,7 +127,7 @@ prepare_cluster_status_files() ->
         end,
     AllNodes2 = lists:usort(AllNodes1 ++ RunningNodes2),
     ok = write_cluster_status({AllNodes2, DiscNodes, RunningNodes2}).
-
+%% 写入Cluster的状态文件
 write_cluster_status({All, Disc, Running}) ->
     ClusterStatusFN = cluster_status_filename(),
     Res = case rabbit_file:write_term_file(ClusterStatusFN, [{All, Disc}]) of
@@ -151,7 +152,9 @@ read_cluster_status() ->
         {Stat, Run} ->
             throw({error, {corrupt_or_missing_cluster_files, Stat, Run}})
     end.
-
+%% 更新集群状态
+%% 相当每次都dump一次Mnesia的状态
+%% 然后写到集群状态文件中
 update_cluster_status() ->
     {ok, Status} = rabbit_mnesia:cluster_status_from_mnesia(),
     write_cluster_status(Status).
