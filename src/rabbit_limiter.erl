@@ -19,6 +19,8 @@
 %% flow control mechanisms, specifically AMQP 0-9-1's basic.qos
 %% prefetch_count, our consumer prefetch extension, and AMQP 1.0's
 %% link (aka consumer) credit mechanism.
+%% RabbitMQ用来进行消息整流的部分，限制消息从队列到channel的发送速率
+%% 这个是AMQP 0.9.1的QOS
 %%
 %% Each channel has an associated limiter process, created with
 %% start_link/1, which it passes to queues on consumer creation with
