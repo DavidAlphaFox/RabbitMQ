@@ -13,6 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
+%% RabbitMQ的QOS限制模块
 
 %% The purpose of the limiter is to stem the flow of messages from
 %% queues to channels, in order to act upon various protocol-level
@@ -28,6 +29,7 @@
 %% The latter isn't strictly necessary, since basic.get is not
 %% subject to limiting, but it means that whenever a queue knows about
 %% a channel, it also knows about its limiter, which is less fiddly.
+%% 每一个Channel都附加了一个限速的process
 %%
 %% The limiter process holds state that is, in effect, shared between
 %% the channel and all queues from which the channel is
@@ -35,12 +37,17 @@
 %% a single, limited resource - the ability to deliver messages via
 %% the channel - and it is the job of the limiter process to mediate
 %% that access.
+%% 每个Channel的限速process是所有的队列中的共享
+%% 每个队列的都要访问一个单独和限制的资源
+%% 因为所有的消息都要通过这个Channel进行分发
 %%
 %% The limiter process is separate from the channel process for two
 %% reasons: separation of concerns, and efficiency. Channels can get
 %% very busy, particularly if they are also dealing with publishes.
 %% With a separate limiter process all the aforementioned access
 %% mediation can take place without touching the channel.
+%% 限制process从Cahnnel中分离出来因为两个原因：职责分离和效率
+%% Channel会非常忙碌，尤其是那些对发布者的
 %%
 %% For efficiency, both the channel and the queues keep some local
 %% state, initialised from the limiter pid with new/1 and client/1,
