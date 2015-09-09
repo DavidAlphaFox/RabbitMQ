@@ -124,6 +124,8 @@
 %% As it turns out, channels will simply ignore such bogus confirms,
 %% but relying on that would introduce a dangerously tight coupling.
 %% 如果Master出现异常，直到一个Slave被提升为Master前，部分消息会出现丢失
+%% Slave在没有从Channel收到Confirm之前，是不会发送Confirm的
+%% 如果不这么做会出现Slave直接对没有发送过消息的Channel发送Confirm
 %%
 %% Hence the slaves have to wait until they've seen both the publish
 %% via gm, and the publish via the channel before they issue the
@@ -136,6 +138,8 @@
 %% example, no ack or consumer-related message can arrive directly at
 %% a slave from a channel: it is only publishes that pass both
 %% directly to the slaves and go via gm.
+%% Slave是不会直接从Channel上收到ack和consumer相关的消息
+%% 这类信息，只会通过GM组发送到Slave上
 %%
 %% Slaves can be added dynamically. When this occurs, there is no
 %% attempt made to sync the current contents of the master with the
@@ -152,6 +156,11 @@
 %% messages at the head of the queue which were there before the slave
 %% joined will disappear, and the slave will become fully synced with
 %% the state of the master.
+%% 任何时候Slave都可以加入到GM组中。但是不要求新加入的Slave要同步当前Master
+%% 所以新加入的Slave不包含任何信息，所以新加入的Slave要忽略真正收到的消息之前的
+%% 消息的操作，而通过GM得到的新的消息，需要正常处理
+%% Slave无需为不接受的信息发送reject
+%% 随着时间的推移，Slave会和Master一致
 %%
 %% The detection of the sync-status is based on the depth of the BQs,
 %% where the depth is defined as the sum of the length of the BQ (as
@@ -172,6 +181,7 @@
 %% promoted to a master, it unilaterally broadcasts its depth, in
 %% order to solve the problem of depth requests from new slaves being
 %% unanswered by a dead master.
+%% 判定Master和Slave是否同步，是通过BQ的队列长度是否相等。
 %%
 %% Obviously, due to the async nature of communication across gm, the
 %% slaves can fall behind. This does not matter from a sync pov: if
@@ -181,6 +191,7 @@
 %% life. This is no worse than normal given you never get confirmation
 %% that an ack has been received (not quite true with QoS-prefetch,
 %% but close enough for jazz).
+%% 由于GM组的通信异步性，Slave会比Master落后一些
 %%
 %% Because acktags are issued by the bq independently, and because
 %% there is no requirement for the master and all slaves to use the
@@ -201,12 +212,20 @@
 %% same msg to be processed by the old master and the new master - if
 %% it was processed by the old master then it will have been processed
 %% by the slave before the slave was promoted, and vice versa.
+%% 当Master死亡的时候，最老的Slave会被提升为Master。
+%% GM组的设计是，Master的死亡信息只会在GM组中广播一次
+%% 如果一个消息被死亡的Master处理了，并且已经广播到GM组中的时候
+%% 在最老的Slave被提升为Master前，会做完相同的处理，才提升为Master
+%% 这个是Erlang的消息有序性的原因
 %%
 %% Upon promotion, all msgs pending acks are requeued as normal, the
 %% slave constructs state suitable for use in the master module, and
 %% then dynamically changes into an amqqueue_process with the master
 %% as the bq, and the slave's bq as the master's bq. Thus the very
 %% same process that was the slave is now a full amqqueue_process.
+%% Slave被提升后，Slave会将所有等待Ack的消息重新放回队列中
+%% 并构建Master模块，用来替换amqqueue_process的后端
+%% 这就可能出现，Master死后，某个消息被重放给消费者
 %%
 %% It is important that we avoid memory leaks due to the death of
 %% senders (i.e. channels) and partial publications. A sender
@@ -244,6 +263,9 @@
 %% message it had received directly from the sender (due to receiving
 %% a sender_death message via gm), it will be able to cope with the
 %% publication purely from the master via gm.
+%% coordinator将监控所有的sender，再将消息转发给Master和Slave
+%% Master会广播一个sender_death消息给所有的slave
+%% 当Slave收到sender_death后slave将不再处理关于该Sender的所有指令
 %%
 %% When a slave receives a DOWN message for a sender, if it has not
 %% received the sender_death message from the master via gm already,
@@ -263,6 +285,8 @@
 %% another sender_death message. Given the 20 second delay before
 %% requesting death confirmation, this is highly unlikely, but it is a
 %% possibility.
+%% 当Slave收到sender的DOWN消息，但是还没有收到sender_death消息
+%% Slave将会等待20秒，但后广播请求，要求Master确认sender是否真的死亡了
 %%
 %% When the 20 second timer expires, the slave first checks to see
 %% whether it still needs confirmation of the death before requesting
