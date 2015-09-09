@@ -85,10 +85,13 @@
 %% needs to react to gm events, such as the death of slaves. Thus the
 %% master creates the coordinator, and it is the coordinator that is
 %% the gm callback module and event handler for the master.
+%% 整个GM组都会收到消息，而Master本身是amqqueue_process的一个Queue实现
+%% 可以说amqqueue_process是一个抽象，实现组合模式
 %%
 %% Consumers are only attached to the master. Thus the master is
 %% responsible for informing all slaves when messages are fetched from
 %% the bq, when they're acked, and when they're requeued.
+%% 消费者，只能从Master上消费，Master负责通知整个GM组消息变化情况
 %%
 %% The basic goal is to ensure that all slaves performs actions on
 %% their bqs in the same order as the master. Thus the master
@@ -102,6 +105,11 @@
 %% publish. As a result of this problem, the messages broadcast over
 %% the gm contain published content, and thus slaves can operate
 %% successfully on messages that they only receive via the gm.
+%% 基本的目标是确保所有所有的Slave队列能和Master队列同步
+%% 所以GM组要负责一致性
+%% Slave可以接收两个数据流，一个是从GM组来的，一个是从Channel直接来的
+%% 通过GM组来的数据流要保证所有的Slave都收到
+%% 而直接通过Channel来的数据流，不应当被其它Slave看到
 %%
 %% The key purpose of also sending messages directly from the channels
 %% to the slaves is that without this, in the event of the death of
@@ -115,6 +123,7 @@
 %% queue's mnesia record (which is what channels look at for routing).
 %% As it turns out, channels will simply ignore such bogus confirms,
 %% but relying on that would introduce a dangerously tight coupling.
+%% 如果Master出现异常，直到一个Slave被提升为Master前，部分消息会出现丢失
 %%
 %% Hence the slaves have to wait until they've seen both the publish
 %% via gm, and the publish via the channel before they issue the
