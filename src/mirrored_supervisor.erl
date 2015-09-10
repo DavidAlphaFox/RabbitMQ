@@ -19,6 +19,8 @@
 %% 它像普通的Supervisor一样工作
 %% 但是在它创建的时候加入一个进程组
 %% 所有在群组中的Supervisor，看起来像一个大的分布式Supervisor
+%% 每个进程有一个child_id,并且在整个群组中，它只会被一个Supervisor所监控
+%% 如果一个Supervisor出现了异常，它所有被监控的进程将被这个组中的其它Supervisor所监控
 
 %% Mirrored Supervisor
 %% ===================

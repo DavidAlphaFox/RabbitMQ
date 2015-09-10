@@ -21,6 +21,7 @@
 %% The named process we are running in.
 -define(SERVER, rabbit_node_monitor).
 
+%% RabbitMQ用来自动解决脑裂问题
 %%----------------------------------------------------------------------------
 
 %% In order to autoheal we want to:
