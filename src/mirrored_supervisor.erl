@@ -15,6 +15,10 @@
 %%
 
 -module(mirrored_supervisor).
+%% RabbitMQ定制的Supervisor
+%% 它像普通的Supervisor一样工作
+%% 但是在它创建的时候加入一个进程组
+%% 所有在群组中的Supervisor，看起来像一个大的分布式Supervisor
 
 %% Mirrored Supervisor
 %% ===================
