@@ -55,6 +55,10 @@
 %%
 %% By creating a mirrored supervisor group with one supervisor on
 %% each node, that's what you get.
+%% 有时候，你需要Erlang进程具备以下特特性
+%% 每个Clsuter只需要一个
+%% 不包含很多状态（非常容易重建）
+%% 当集群中运行该进程的节点出现异常的时候，需要能在别的节点上重启
 %%
 %%
 %% API use
