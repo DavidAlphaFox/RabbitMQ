@@ -101,9 +101,13 @@
 %% overall supervisor supervises the other two processes. Its pid is
 %% the one returned from start_link; the pids of the other two
 %% processes are effectively hidden in the API.
-%%
+%% 每个mirrored_supervisor包含3个process
+%% 一个总的supervisor，一个delegate，一个mirroring的服务器
+%% 总的supervisor监控剩下的两个进程
+%% 
 %% The delegate supervisor is in charge of supervising all the child
 %% processes that are added to the supervisor as usual.
+%% delegate负责监控所有加入到supervisor的进程
 %%
 %% The mirroring server intercepts calls to the supervisor API
 %% (directed at the overall supervisor), does any special handling,
@@ -117,6 +121,8 @@
 %% turn. When it receives a 'DOWN' message, it checks to see if it's
 %% the "first" server in the group and restarts all the child
 %% processes from the dead supervisor if so.
+%% mirroring服务在启动的时候加入一个进程组，然后广播hello这个消息，
+%% 进程组中，这样其它进程就可以监控它
 %%
 %% In the future we might load balance this.
 %%

@@ -37,7 +37,7 @@
 %%%
 %%% Exported functions
 %%%
-
+%%% 进程组
 -spec start_link() -> {'ok', pid()} | {'error', term()}.
 
 start_link() ->
