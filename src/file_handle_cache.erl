@@ -33,6 +33,10 @@
 %% 4) Although there is a write buffer, there is no read buffer. Feel
 %% free to use the read_ahead mode, but beware of the interaction
 %% between that buffer and the write buffer.
+%% 支持单个写入，多个读出
+%% 不让不同的进程同时打开相同的文件
+%% 增量写，不准向文件中间写数据
+%% 有写入buffer，但是没有读取buffer
 %%
 %% Some benefits
 %% 1) You do not have to remember to call sync before close

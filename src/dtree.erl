@@ -29,7 +29,8 @@
 %%
 %% The set of secondary keys must be non-empty. Or, to put it another
 %% way, entries only exist while their secondary key set is non-empty.
-
+%% 多个Key对一个Value的数据结构
+%% 底层使用gb_tree实现
 -module(dtree).
 
 -export([empty/0, insert/4, take/3, take/2, take_all/2, drop/2,
