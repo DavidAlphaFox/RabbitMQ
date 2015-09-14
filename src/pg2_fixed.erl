@@ -49,7 +49,8 @@ start() ->
     ensure_started().
 
 -spec create(term()) -> 'ok'.
-
+%% 使用ets来保存进程组的名字
+%% 让所有的节点都执行创建过程
 create(Name) ->
     ensure_started(),
     case ets:member(pg2_fixed_table, {group, Name}) of
@@ -227,6 +228,9 @@ handle_cast(_, S) ->
 handle_info({'DOWN', MonitorRef, process, _Pid, _Info}, S) ->
     member_died(MonitorRef),
     {noreply, S};
+%% 处理节点加入
+%% 节点启动后发送消息给该节点
+%% 让该节点更新信息
 handle_info({nodeup, Node}, S) ->
     gen_server:cast({?MODULE, Node}, {exchange, node(), all_members()}),
     {noreply, S};
@@ -295,12 +299,17 @@ member_died(Ref) ->
 
 join_group(Name, Pid) ->
     Ref_Pid = {ref, Pid}, 
+    %% counter 不存在才加入，速度比memeber快
+    %% 这样，一个进程在多个进程组中的时候，不需要多次monitor
+    %% 退出进程组的时候减少1，直到减到0的时候，才取消monitor
     try _ = ets:update_counter(pg2_fixed_table, Ref_Pid, {4, +1})
     catch _:_ ->
             {RPid, Ref} = do_monitor(Pid),
             true = ets:insert(pg2_fixed_table, {Ref_Pid, RPid, Ref, 1}),
             true = ets:insert(pg2_fixed_table, {{ref, Ref}, Pid})
     end,
+    %% 同样道理
+    %% 先尝试增加counter，如果不成功再insert
     Member_Name_Pid = {member, Name, Pid},
     try _ = ets:update_counter(pg2_fixed_table, Member_Name_Pid, {2, +1, 1, 1})
     catch _:_ ->
