@@ -1077,12 +1077,15 @@ ensure_alive_suffix1(MembersQ) ->
 %%添加进程到Group中
 join_group(Self, GroupName, TxnFun) ->
     join_group(Self, GroupName, dirty_read_group(GroupName), TxnFun).
-
+%% 进程组已经不存在的处理
+%% 清理掉老的组，并重建一个同名的新租
 join_group(Self, GroupName, {error, not_found}, TxnFun) ->
     join_group(Self, GroupName,
                prune_or_create_group(Self, GroupName, TxnFun), TxnFun);
+%% 该进程组中只有当前进程
 join_group(Self, _GroupName, #gm_group { members = [Self] } = Group, _TxnFun) ->
     group_to_view(Group);
+%% 尝试加入进程组
 join_group(Self, GroupName, #gm_group { members = Members } = Group, TxnFun) ->
     case lists:member(Self, Members) of
         true ->
@@ -1094,6 +1097,7 @@ join_group(Self, GroupName, #gm_group { members = Members } = Group, TxnFun) ->
                                prune_or_create_group(Self, GroupName, TxnFun),
                                TxnFun);
                 Alive ->
+                	%% 随机找出左侧的进程
                     Left = lists:nth(random:uniform(length(Alive)), Alive),
                     Handler =
                         fun () ->
@@ -1104,6 +1108,7 @@ join_group(Self, GroupName, #gm_group { members = Members } = Group, TxnFun) ->
                                   TxnFun)
                         end,
                     try
+                    	%% 像左侧进程发消息，告诉对方当前进程是新的右侧进程
                         case neighbour_call(Left, {add_on_right, Self}) of
                             {ok, Group1} -> group_to_view(Group1);
                             not_ready    -> join_group(Self, GroupName, TxnFun)
