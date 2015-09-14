@@ -15,7 +15,6 @@
 %%
 
 -module(gm).
-
 %% Guaranteed Multicast
 %% ====================
 %%
@@ -28,11 +27,13 @@
 %% member of the group, up until the time at which it is known by the
 %% member who published the message that the message has reached all
 %% group members.
+%% 该模块提供了创建可动态变更的进程组的能力及保证能广播到所有成员的能力
 %%
 %% The guarantee given is that provided a message, once sent, makes it
 %% to members who do not all leave the group, the message will
 %% continue to propagate to all group members.
-%%
+%% 该模块保证，给定一个消息，只要发送了，保证在组内所有的成员都收到
+%% 
 %% Another way of stating the guarantee is that if member P publishes
 %% messages m and m', then for all members P', if P' is a member of
 %% the group prior to the publication of m, and P' receives m', then
@@ -108,6 +109,10 @@
 %% substantially impact the CPU and network workload of such members,
 %% as such members would have to accommodate the cost of sending each
 %% message to every group member.
+%% 最简单的一个实现，就是直接让sender发送消息给这个群组中所有的成员
+%% 但这要求整个集群是fully connected，并且如果sender突然在发送过程中
+%% 死掉了，谁来负责将消息接着传递是一个问题。同时这个会非常消耗发送者的CPU
+%% 和网络吞吐
 %%
 %% Instead, if the members of the group are arranged in a chain, then
 %% it becomes easier to reason about who within the group has received
@@ -121,6 +126,11 @@
 %% for every group member to know of every other group member, and
 %% even that a group member does not have to be accessible from all
 %% other group members.
+%% 取而代之的是，如果一个组内的成员像一个链条一样（击鼓传花）
+%% 处理谁收到了消息，谁没收到消息就非常简单。
+%% 并且非常容易决定当一个进程死掉，由谁来继续传递这个消息
+%% 这样发送和接收的网络流量非常均衡
+%% 该方案的另一个好处是，不需要所有节点都是fully connected
 %%
 %% Performance is kept high by permitting pipelining and all
 %% communication between joined group members is asynchronous. In the
