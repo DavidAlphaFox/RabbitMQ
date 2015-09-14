@@ -310,6 +310,7 @@ join_group(Name, Pid) ->
     end,
     %% 同样道理
     %% 先尝试增加counter，如果不成功再insert
+    %% 这样一个进程，可以多次加入一个进程组中
     Member_Name_Pid = {member, Name, Pid},
     try _ = ets:update_counter(pg2_fixed_table, Member_Name_Pid, {2, +1, 1, 1})
     catch _:_ ->
