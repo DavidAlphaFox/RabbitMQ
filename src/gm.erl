@@ -152,6 +152,7 @@
 %% to remember every message published until it is told that it can
 %% forget about the message. This is essential not just for dealing
 %% with failure of members, but also for the addition of new members.
+%% 通过使用异步和管道通信，保证整个消息系统非常高性能
 %%
 %% Thus once A receives the message back again, it then sends to B an
 %% acknowledgement for the message, indicating that B can now forget
@@ -174,7 +175,12 @@
 %% (the sending member must also do this in order to be able to
 %% accommodate failures), and forwards messages on to their downstream
 %% neighbours.
-%%
+%% 两条主要的规则
+%% 1.sender，必须再次收到自己发送出去的消息，才能发送ack消息，
+%% 直到再次收到ack消息，该消息才算广播成功
+%% 2.组内其它成员，收到消息后需要更新自己的状态并且将消息转发给链条的
+%% 另一端
+%% 
 %%
 %% Implementation: It gets trickier
 %% --------------------------------
