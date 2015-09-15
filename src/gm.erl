@@ -681,7 +681,7 @@ handle_cast({broadcast, Msg, _SizeHint},
 handle_cast({broadcast, Msg, SizeHint}, State) ->
     {Result, State1} = internal_broadcast(Msg, SizeHint, State),
     handle_callback_result({Result, maybe_flush_broadcast_buffer(State1)});
-
+%% 进程初始化之后，先让自己join下
 handle_cast(join, State = #state { self          = Self,
                                    group_name    = GroupName,
                                    members_state = undefined,
@@ -1007,7 +1007,7 @@ with_view_member(Fun, View, Id) ->
 fetch_view_member(Id, {_Ver, View}) -> ?DICT:fetch(Id, View).
 
 find_view_member(Id, {_Ver, View}) -> ?DICT:find(Id, View).
-
+%% 创建一个的DICT
 blank_view(Ver) -> {Ver, ?DICT:new()}.
 
 alive_view_members({_Ver, View}) -> ?DICT:fetch_keys(View).
@@ -1017,12 +1017,12 @@ all_known_members({_Ver, View}) ->
        fun (Member, #view_member { aliases = Aliases }, Acc) ->
                ?SETS:to_list(Aliases) ++ [Member | Acc]
        end, [], View).
-
+%% 用来将群组内进程构建成一个链条
 group_to_view(#gm_group { members = Members, version = Ver }) ->
     Alive = lists:filter(fun is_member_alive/1, Members),
     [_|_] = Alive, %% ASSERTION - can't have all dead members
     add_aliases(link_view(Alive ++ Alive ++ Alive, blank_view(Ver)), Members).
-
+%% 构建消息链
 link_view([Left, Middle, Right | Rest], View) ->
     case find_view_member(Middle, View) of
         error ->
@@ -1039,7 +1039,10 @@ link_view(_, View) ->
     View.
 
 add_aliases(View, Members) ->
+	%% Members已经是全部都是存活的
     Members1 = ensure_alive_suffix(Members),
+    %% 确保所有的Members都是存活
+    %% 或者将死掉的进程全都当作活着的进程的别名
     {EmptyDeadSet, View1} =
         lists:foldl(
           fun (Member, {DeadAcc, ViewAcc}) ->
@@ -1059,7 +1062,7 @@ add_aliases(View, Members) ->
           end, {?SETS:new(), View}, Members1),
     0 = ?SETS:size(EmptyDeadSet), %% ASSERTION
     View1.
-
+%% 强行剔除掉死亡的member
 ensure_alive_suffix(Members) ->
     queue:to_list(ensure_alive_suffix1(queue:from_list(Members))).
 
