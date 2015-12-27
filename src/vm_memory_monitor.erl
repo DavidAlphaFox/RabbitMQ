@@ -203,7 +203,8 @@ set_mem_limits(State, MemFraction) ->
     internal_update(State #state { total_memory    = TotalMemory,
                                    memory_limit    = MemLim,
                                    memory_fraction = MemFraction}).
-
+%% 通过计时的方式，不断查询Erlang现在使用了多少的内存
+%% 然后如果超过了阀值就进行报警
 internal_update(State = #state { memory_limit = MemLimit,
                                  alarmed      = Alarmed,
                                  alarm_funs   = {AlarmSet, AlarmClear} }) ->

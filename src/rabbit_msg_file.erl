@@ -54,7 +54,7 @@
 -endif.
 
 %%----------------------------------------------------------------------------
-
+%% 将一条消息写入文件中
 append(FileHdl, MsgId, MsgBody)
   when is_binary(MsgId) andalso size(MsgId) =:= ?MSG_ID_SIZE_BYTES ->
     MsgBodyBin  = term_to_binary(MsgBody),

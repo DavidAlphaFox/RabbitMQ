@@ -48,6 +48,11 @@
 %% 4) You can find out what your 'real' offset is, and what your
 %% 'virtual' offset is (i.e. where the hdl really is, and where it
 %% would be after the write buffer is written out).
+%% 
+%% 1.这么做的好处是，在关闭文件前，不需要调用同步
+%% 2.可以控制好buffer机制，这样可以进行写后立刻读取
+%% 3.不需要调用寻址操作了
+%% 4.可以完成虚拟地址和实际地址的映射操作
 %%
 %% There is also a server component which serves to limit the number
 %% of open file descriptors. This is a hard limit: the server
@@ -72,6 +77,8 @@
 %% the server keeps track of when the least recently used file handle
 %% was used *at the point of the most recent open or close* by each
 %% client.
+%% 
+%% 每一个进程都保持了一个文件句柄的LRU缓存，这个可以根据需要进行关闭
 %%
 %% Note that this data can go very out of date, by the client using
 %% the least recently used handle.
@@ -292,19 +299,26 @@ start_link(AlarmSet, AlarmClear) ->
 register_callback(M, F, A)
   when is_atom(M) andalso is_atom(F) andalso is_list(A) ->
     gen_server2:cast(?SERVER, {register_callback, self(), {M, F, A}}).
-
+%% 请求打开文件
 open(Path, Mode, Options) ->
+    %% 得到文件的绝对路径
     Path1 = filename:absname(Path),
+    %% 从管理器中拿到文件的虚拟句柄
     File1 = #file { reader_count = RCount, has_writer = HasWriter } =
         case get({Path1, fhc_file}) of
             File = #file {} -> File;
             undefined       -> #file { reader_count = 0,
                                        has_writer = false }
         end,
+    %% 获取操作模式    
     Mode1 = append_to_write(Mode),
+    %% 是否是写入模式
     IsWriter = is_writer(Mode1),
     case IsWriter andalso HasWriter of
+        %% 如果已经存在写入者，那么需要报错
+        %% 因为已经有一个可写的句柄存在了
         true  -> {error, writer_exists};
+        %% 将引用信息放入当前进程的进程存储中
         false -> {ok, Ref} = new_closed_handle(Path1, Mode1, Options),
                  case get_or_reopen([{Ref, new}]) of
                      {ok, [_Handle1]} ->
@@ -355,12 +369,16 @@ append(Ref, Data) ->
               {error, not_open_for_writing};
           ([Handle]) ->
               case maybe_seek(eof, Handle) of
+                  %% 当缓存的空间为0的时候
+                  %% 直接写入文件
                   {{ok, _Offset}, #handle { hdl = Hdl, offset = Offset,
                                             write_buffer_size_limit = 0,
                                             at_eof = true } = Handle1} ->
                       Offset1 = Offset + iolist_size(Data),
                       {prim_file:write(Hdl, Data),
                        [Handle1 #handle { is_dirty = true, offset = Offset1 }]};
+                  %% 当还有缓存空间的时候
+                  %% 那么将数据放入缓存     
                   {{ok, _Offset}, #handle { write_buffer = WriteBuffer,
                                             write_buffer_size = Size,
                                             write_buffer_size_limit = Limit,
@@ -369,6 +387,7 @@ append(Ref, Data) ->
                       Size1 = Size + iolist_size(Data),
                       Handle2 = Handle1 #handle { write_buffer = WriteBuffer1,
                                                   write_buffer_size = Size1 },
+                      %% 缓存超过限制，进行落盘                            
                       case Limit =/= infinity andalso Size1 > Limit of
                           true  -> {Result, Handle3} = write_buffer(Handle2),
                                    {Result, [Handle3]};
@@ -572,6 +591,7 @@ with_flushed_handles(Refs, Fun) ->
       Refs,
       fun (Handles) ->
               case lists:foldl(
+                      %% 此处先将数据落盘
                      fun (Handle, {ok, HandlesAcc}) ->
                              {Res, Handle1} = write_buffer(Handle),
                              {Res, [Handle1 | HandlesAcc]};
@@ -586,8 +606,11 @@ with_flushed_handles(Refs, Fun) ->
       end).
 
 get_or_reopen(RefNewOrReopens) ->
+    %% 需要区分句柄是打开的还是已经关闭了
     case partition_handles(RefNewOrReopens) of
         {OpenHdls, []} ->
+            %% 处在打开的状态
+            %% 那么刻意直接返回了
             {ok, [Handle || {_Ref, Handle} <- OpenHdls]};
         {OpenHdls, ClosedHdls} ->
             Oldest = oldest(get_age_tree(), fun () -> now() end),
@@ -613,6 +636,8 @@ reopen(ClosedHdls) -> reopen(ClosedHdls, get_age_tree(), []).
 reopen([], Tree, RefHdls) ->
     put_age_tree(Tree),
     {ok, lists:reverse(RefHdls)};
+%% 在reopen中进行实际的打开
+%% 实际上还是在调用进程中进行的    
 reopen([{Ref, NewOrReopen, Handle = #handle { hdl          = closed,
                                               path         = Path,
                                               mode         = Mode,
@@ -821,6 +846,7 @@ write_buffer(Handle = #handle { hdl = Hdl, offset = Offset,
                                 write_buffer = WriteBuffer,
                                 write_buffer_size = DataSize,
                                 at_eof = true }) ->
+    %% 直接落盘所有缓存数据
     case prim_file:write(Hdl, lists:reverse(WriteBuffer)) of
         ok ->
             Offset1 = Offset + DataSize,
