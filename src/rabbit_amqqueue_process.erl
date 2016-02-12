@@ -1126,7 +1126,7 @@ handle_cast({reject, false, AckTags, ChPid}, State) ->
                                                  AckTags, X, State1)
                                        end) end,
               fun () -> ack(AckTags, ChPid, State) end));
-
+%% 收到该消息，直接停止进程
 handle_cast(delete_immediately, State) ->
     stop(State);
 

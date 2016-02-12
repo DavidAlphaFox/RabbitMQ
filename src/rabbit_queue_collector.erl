@@ -56,7 +56,8 @@ init([ProcName]) ->
     {ok, #state{monitors = pmon:new(), delete_from = undefined}}.
 
 %%--------------------------------------------------------------------------
-
+%% 注册Queue的进程
+%% 如果没有删除，则直接进入下一步
 handle_call({register, QPid}, _From,
             State = #state{monitors = QMons, delete_from = Deleting}) ->
     case Deleting of

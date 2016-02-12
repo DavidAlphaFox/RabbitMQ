@@ -1141,6 +1141,9 @@ handle_method(#'queue.declare'{queue       = QueueNameBin,
               _, State = #ch{virtual_host        = VHostPath,
                              conn_pid            = ConnPid,
                              queue_collector_pid = CollectorPid}) ->
+    %% 如果是排他队列
+    %% 只对首次声明该队列链接的可见
+    %% 当该链接丢失队列也会被直接删除
     Owner = case ExclusiveDeclare of
                 true  -> ConnPid;
                 false -> none

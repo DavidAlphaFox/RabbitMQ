@@ -57,7 +57,9 @@ init({Q, StartMode, Marker}) ->
                 {true,  _}     -> master;
                 {false, _}     -> restart
             end).
-
+%% 真正的模块是后面的模块
+%% gen_server并没有这个特性
+%% gen_server2提供了一个Backoff模块让gen_server2可以进行替换消息处理模块
 init(Q, master) -> rabbit_amqqueue_process:init(Q);
 init(Q, slave)  -> rabbit_mirror_queue_slave:init(Q);
 
