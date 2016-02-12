@@ -677,6 +677,7 @@ create_channel(Channel,
                                    user         = User,
                                    vhost        = VHost,
                                    capabilities = Capabilities}} = State) ->
+    %% 先建立一个supervisor，这个supervisor会建立一个rabbit_channel
     {ok, _ChSupPid, {ChPid, AState}} =
         rabbit_channel_sup_sup:start_channel(
           ChanSupSup, {tcp, Sock, Channel, FrameMax, self(), Name,

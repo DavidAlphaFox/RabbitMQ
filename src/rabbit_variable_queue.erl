@@ -1474,7 +1474,7 @@ record_confirms(MsgIdSet, State = #vqstate { msgs_on_disk        = MOD,
       msg_indices_on_disk = rabbit_misc:gb_sets_difference(MIOD, MsgIdSet),
       unconfirmed         = rabbit_misc:gb_sets_difference(UC,   MsgIdSet),
       confirmed           = gb_sets:union(C, MsgIdSet) }.
-
+%% 当消息被写到磁盘的时候，会回调该函数
 msgs_written_to_disk(Callback, MsgIdSet, ignored) ->
     Callback(?MODULE,
              fun (?MODULE, State) -> record_confirms(MsgIdSet, State) end);

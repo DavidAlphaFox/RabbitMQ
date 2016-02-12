@@ -356,6 +356,7 @@ bounds(State = #qistate { segments = Segments }) ->
     {LowSeqId, NextSeqId, State}.
 
 start(DurableQueueNames) ->
+    %% 从dest中recovery
     ok = rabbit_recovery_terms:start(),
     {DurableTerms, DurableDirectories} =
         lists:foldl(
@@ -514,7 +515,7 @@ queues_dir() ->
 %%----------------------------------------------------------------------------
 %% msg store startup delta function
 %%----------------------------------------------------------------------------
-
+%% index启动函数，msg_store启动
 queue_index_walker({start, DurableQueues}) when is_list(DurableQueues) ->
     {ok, Gatherer} = gatherer:start_link(),
     [begin

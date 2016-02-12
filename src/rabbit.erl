@@ -650,7 +650,7 @@ basic_boot_error(Reason, Format, Args) ->
 boot_delegate() ->
     {ok, Count} = application:get_env(rabbit, delegate_count),
     rabbit_sup:start_supervisor_child(delegate_sup, [Count]).
-
+%% 进行恢复
 recover() ->
     rabbit_policy:recover(),
     Qs = rabbit_amqqueue:recover(),

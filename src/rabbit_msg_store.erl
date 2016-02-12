@@ -443,7 +443,7 @@
 %%----------------------------------------------------------------------------
 %% public API
 %%----------------------------------------------------------------------------
-
+%% 名字，Mnesia的目录，需要恢复的ref，还有相应的函数
 start_link(Server, Dir, ClientRefs, StartupFunState) ->
     gen_server2:start_link({local, Server}, ?MODULE,
                            [Server, Dir, ClientRefs, StartupFunState],
@@ -451,7 +451,7 @@ start_link(Server, Dir, ClientRefs, StartupFunState) ->
 
 successfully_recovered_state(Server) ->
     gen_server2:call(Server, successfully_recovered_state, infinity).
-
+%% 初始化一个Client的状态
 client_init(Server, Ref, MsgOnDiskFun, CloseFDsFun) ->
     {IState, IModule, Dir, GCPid,
      FileHandlesEts, FileSummaryEts, CurFileCacheEts, FlyingEts} =
@@ -675,10 +675,13 @@ init([Server, BaseDir, ClientRefs, StartupFunState]) ->
                                              [self()]),
 
     Dir = filename:join(BaseDir, atom_to_list(Server)),
-
+    %% 获取store的index模块
+    %% 默认的index模块是rabbit_msg_store_ets_index
     {ok, IndexModule} = application:get_env(msg_store_index_module),
     rabbit_log:info("~w: using ~p to provide index~n", [Server, IndexModule]),
-
+    %% 如果ClientRefs是undefined
+    %% 就将FileSummary全部的删除掉
+    %% 否则从crash中恢复过来
     AttemptFileSummaryRecovery =
         case ClientRefs of
             undefined -> ok = rabbit_file:recursive_delete([Dir]),
@@ -787,7 +790,7 @@ prioritise_info(Msg, _Len, _State) ->
 
 handle_call(successfully_recovered_state, _From, State) ->
     reply(State #msstate.successfully_recovered, State);
-
+%% 将公用的ets表返回给客户端
 handle_call({new_client_state, CRef, CPid, MsgOnDiskFun, CloseFDsFun}, _From,
             State = #msstate { dir                = Dir,
                                index_state        = IndexState,
@@ -834,9 +837,13 @@ handle_cast({write, CRef, MsgId, Flow},
                   credit_flow:ack(CPid, ?CREDIT_DISC_BOUND);
         noflow -> ok
     end,
+    %% 更新counter的结果为0或小于0
+    %% 此处断言才会为真
     true = 0 =< ets:update_counter(CurFileCacheEts, MsgId, {3, -1}),
     case update_flying(-1, MsgId, CRef, State) of
         process ->
+            %% 标记为需要process
+            %% 就写入消息
             [{MsgId, Msg, _PWC}] = ets:lookup(CurFileCacheEts, MsgId),
             noreply(write_message(MsgId, Msg, CRef, State));
         ignore ->
@@ -1233,6 +1240,9 @@ safe_ets_update_counter(Tab, Key, UpdateOp, SuccessFun, FailThunk) ->
     end.
 
 update_msg_cache(CacheEts, MsgId, Msg) ->
+    %% 尝试添加一个新的消息
+    %% 消息ID是key
+    %% 消息体 ＋ count是消息体
     case ets:insert_new(CacheEts, {MsgId, Msg, 1}) of
         true  -> ok;
         false -> safe_ets_update_counter(
@@ -1295,6 +1305,8 @@ blind_confirm(CRef, MsgIds, ActionTaken, State) ->
 %% rewrite the msg - rewriting it would make it younger than the death
 %% msg and thus should be ignored. Note that this (correctly) returns
 %% false when testing to remove the death msg itself.
+%% 如果消息比客户端死亡的消息要老，并且ref_count为0，只需要修改ref_count,就不需要写消息
+%% 重写这个消息，会让消息比客户端死亡消息更新
 should_mask_action(CRef, MsgId,
                    State = #msstate { dying_clients = DyingClients }) ->
     case {sets:is_element(CRef, DyingClients), index_lookup(MsgId, State)} of

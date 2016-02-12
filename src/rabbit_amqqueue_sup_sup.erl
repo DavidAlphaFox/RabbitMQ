@@ -44,6 +44,7 @@ start_link() ->
 start_queue_process(Node, Q, StartMode) ->
     {ok, _SupPid, QPid} = supervisor2:start_child(
                             {?SERVER, Node}, [Q, StartMode]),
+    %% 把Queue的进程返回给创建者
     QPid.
 
 init([]) ->
