@@ -212,6 +212,11 @@
 %% lazily in order to prevent doing GC on files which are soon to be
 %% emptied (and hence deleted) soon.
 %%
+%% 当我们发现一个文件现在是空的，我们可以删除它。当我们发现它可以被合并的时候
+%% 我们会进行一次垃圾回收，将两个文件合并成一个，这样会提高性能降低磁盘使用率
+%% 不过我们会尽可能的延迟做这件事情，因为作为一个消息队列，很可能当我们进行合
+%% 并的时候，文件已经被废弃了
+%%
 %% Given the compaction between two files, the left file (i.e. elder
 %% file) is considered the ultimate destination for the good data in
 %% the right file. If necessary, the good data in the left file which
@@ -227,6 +232,8 @@
 %% (this consists of tidyup - the compaction is deliberately designed
 %% such that data is duplicated on disk rather than risking it being
 %% lost), and rebuild the FileSummary ets table and Index.
+%%
+%% 在一个异常恢复阶段，我们需要扫描所有文件，以便发现在合并时候出现的崩溃
 %%
 %% So, with this design, messages move to the left. Eventually, they
 %% should end up in a contiguous block on the left and are then never
@@ -516,7 +523,9 @@ server_cast(#client_msstate { server = Server }, Msg) ->
 client_write(MsgId, Msg, Flow,
              CState = #client_msstate { cur_file_cache_ets = CurFileCacheEts,
                                         client_ref         = CRef }) ->
+    %% 更新正在递送的数量
     ok = client_update_flying(+1, MsgId, CState),
+    %% 把消息缓存到ets中
     ok = update_msg_cache(CurFileCacheEts, MsgId, Msg),
     ok = server_cast(CState, {write, CRef, MsgId, Flow}).
 
@@ -630,7 +639,7 @@ client_read3(#msg_location { msg_id = MsgId, file = File }, Defer,
                     Defer()
             end
     end.
-
+%% 更新正在递送的ets数量
 client_update_flying(Diff, MsgId, #client_msstate { flying_ets = FlyingEts,
                                                     client_ref = CRef }) ->
     Key = {MsgId, CRef},
@@ -1106,6 +1115,7 @@ write_message(MsgId, Msg,
                                  file_summary_ets    = FileSummaryEts }) ->
     {ok, CurOffset} = file_handle_cache:current_virtual_offset(CurHdl),
     {ok, TotalSize} = rabbit_msg_file:append(CurHdl, MsgId, Msg),
+    %% 将写盘操作的结果加入索引中
     ok = index_insert(
            #msg_location { msg_id = MsgId, ref_count = 1, file = CurFile,
                            offset = CurOffset, total_size = TotalSize }, State),

@@ -1194,14 +1194,15 @@ queue_out(State = #vqstate { q4 = Q4 }) ->
         {{value, MsgStatus}, Q4a} ->
             {{value, MsgStatus}, State #vqstate { q4 = Q4a }}
     end.
-
+%% RabbitMQ把消息的MsgID放在队列中
+%% 把消息体放到磁盘上，用来减少内存占用
 read_msg(#msg_status{msg           = undefined,
                      msg_id        = MsgId,
                      is_persistent = IsPersistent}, State) ->
     read_msg(MsgId, IsPersistent, State);
 read_msg(#msg_status{msg = Msg}, State) ->
     {Msg, State}.
-
+%% 读取消息
 read_msg(MsgId, IsPersistent, State = #vqstate{msg_store_clients = MSCState}) ->
     {{ok, Msg = #basic_message {}}, MSCState1} =
         msg_store_read(MSCState, IsPersistent, MsgId),

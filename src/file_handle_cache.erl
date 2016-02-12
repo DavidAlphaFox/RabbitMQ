@@ -434,7 +434,8 @@ truncate(Ref) ->
                   Error -> {Error, [Handle1]}
               end
       end).
-
+%% 获取当前句柄的偏移量
+%% 这里面的偏移量包涵了内存缓存
 current_virtual_offset(Ref) ->
     with_handles([Ref], fun ([#handle { at_eof = true, is_write = true,
                                         offset = Offset,

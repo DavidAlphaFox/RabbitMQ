@@ -88,7 +88,8 @@
 %% 更新流量
 %% 如果流量数不为1，则更新流量，并准许发送消息
 %% 如果数量为1，则进行限流
-send(From) -> send(From, ?DEFAULT_CREDIT).
+send(From) ->
+    send(From, ?DEFAULT_CREDIT).
 
 send(From, {InitialCredit, _MoreCreditAfter}) ->
     ?UPDATE({credit_from, From}, InitialCredit, C,
@@ -114,23 +115,30 @@ handle_bump_msg({From, MoreCredit}) ->
             end).
 %% 如果读取credit_blocked
 %% 如果存在数据且不为空则处在block状态
-blocked() -> case get(credit_blocked) of
-                 undefined -> false;
-                 []        -> false;
-                 _         -> true
-             end.
+blocked() ->
+    case get(credit_blocked) of
+        undefined -> false;
+        []        -> false;
+        _         -> true
+    end.
 
-state() -> case blocked() of
-               true  -> flow;
-               false -> case get(credit_blocked_at) of
-                            undefined -> running;
-                            B         -> Diff = timer:now_diff(erlang:now(), B),
-                                         case Diff < 5000000 of
-                                             true  -> flow;
-                                             false -> running
-                                         end
-                        end
-           end.
+state() -> 
+    case blocked() of
+        true  -> 
+            flow;
+        false ->
+            case get(credit_blocked_at) of
+                undefined -> 
+                    running;
+                B         -> 
+                    Diff = timer:now_diff(erlang:now(), B),
+                    case Diff < 5000000 of
+                        true  -> flow;
+                        false -> running
+                    end
+            end
+    end.
+
 %% 当一个Peer消失的时候
 %% 我们需要清理一个Peer在当前进程字典上的数据
 %% Peer有可能是From也有可能是To，所以都要清理
@@ -152,7 +160,7 @@ grant(To, Quantity) ->
         false -> To ! Msg;
         true  -> ?UPDATE(credit_deferred, [], Deferred, [{To, Msg} | Deferred])
     end.
-%% 如果请求已经被Block了，就直接结束
+%% 如果请求已经被Block了，就不用记录block的时间
 %% 没有被Block，则放入进程字典中
 block(From) ->
     case blocked() of
@@ -160,7 +168,7 @@ block(From) ->
         true  -> ok
     end,
     ?UPDATE(credit_blocked, [], Blocks, [From | Blocks]).
-
+%% 从block队列中删除掉相应的发送者
 unblock(From) ->
     ?UPDATE(credit_blocked, [], Blocks, Blocks -- [From]),
     case blocked() of
