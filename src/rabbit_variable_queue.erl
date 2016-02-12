@@ -1106,7 +1106,7 @@ expand_delta(_SeqId, #delta { count       = Count } = Delta) ->
 %%----------------------------------------------------------------------------
 %% Internal major helpers for Public API
 %%----------------------------------------------------------------------------
-
+%% 最后进行初始化的函数
 init(IsDurable, IndexState, DeltaCount, DeltaBytes, Terms,
      PersistentClient, TransientClient) ->
     {LowSeqId, NextSeqId, IndexState1} = rabbit_queue_index:bounds(IndexState),

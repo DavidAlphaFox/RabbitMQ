@@ -1098,7 +1098,8 @@ handle_call(cancel_sync_mirrors, _From, State) ->
 
 handle_cast(init, State) ->
     init_it({no_barrier, non_clean_shutdown}, none, State);
-
+%% 当消息写入磁盘，或者消息索引写入磁盘
+%% 回调函数
 handle_cast({run_backing_queue, Mod, Fun},
             State = #q{backing_queue = BQ, backing_queue_state = BQS}) ->
     noreply(State#q{backing_queue_state = BQ:invoke(Mod, Fun, BQS)});

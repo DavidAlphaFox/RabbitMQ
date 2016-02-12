@@ -801,6 +801,7 @@ handle_call({new_client_state, CRef, CPid, MsgOnDiskFun, CloseFDsFun}, _From,
                                flying_ets         = FlyingEts,
                                clients            = Clients,
                                gc_pid             = GCPid }) ->
+    %% 将Client的回调函数存储起来
     Clients1 = dict:store(CRef, {CPid, MsgOnDiskFun, CloseFDsFun}, Clients),
     erlang:monitor(process, CPid),
     reply({IndexState, IndexModule, Dir, GCPid, FileHandlesEts, FileSummaryEts,
