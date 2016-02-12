@@ -828,7 +828,8 @@ handle_cast({client_delete, CRef},
             State = #msstate { clients = Clients }) ->
     State1 = State #msstate { clients = dict:erase(CRef, Clients) },
     noreply(remove_message(CRef, CRef, clear_client(CRef, State1)));
-
+%% 写入消息
+%% 参数为客户端的ref，消息ID，以及是否是有流控制
 handle_cast({write, CRef, MsgId, Flow},
             State = #msstate { cur_file_cache_ets = CurFileCacheEts,
                                clients            = Clients }) ->
@@ -844,6 +845,7 @@ handle_cast({write, CRef, MsgId, Flow},
         process ->
             %% 标记为需要process
             %% 就写入消息
+            %% 从文件缓存中拿出来消息体
             [{MsgId, Msg, _PWC}] = ets:lookup(CurFileCacheEts, MsgId),
             noreply(write_message(MsgId, Msg, CRef, State));
         ignore ->
@@ -1636,7 +1638,7 @@ drop_contiguous_block_prefix([#msg_location { offset = ExpectedOffset,
     drop_contiguous_block_prefix(Tail, ExpectedOffset1);
 drop_contiguous_block_prefix(MsgsAfterGap, ExpectedOffset) ->
     {ExpectedOffset, MsgsAfterGap}.
-
+%% 重建索引
 build_index(true, _StartupFunState,
             State = #msstate { file_summary_ets = FileSummaryEts }) ->
     ets:foldl(
@@ -1801,7 +1803,7 @@ maybe_compact(State = #msstate { sum_valid_data        = SumValid,
     end;
 maybe_compact(State) ->
     State.
-
+%% 找到需要合并的文件
 find_files_to_combine(FileSummaryEts, FileSizeLimit,
                       [#file_summary { file             = Dst,
                                        valid_total_size = DstValid,

@@ -551,7 +551,7 @@ attempt_delivery(Delivery = #delivery{sender = SenderPid, message = Message},
                             ActiveConsumersChanged,
                             State#q{consumers = Consumers})}
     end.
-
+%% 要么deliver，要么放进队列
 deliver_or_enqueue(Delivery = #delivery{message = Message, sender = SenderPid},
                    Delivered, State = #q{backing_queue       = BQ,
                                          backing_queue_state = BQS}) ->

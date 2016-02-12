@@ -832,6 +832,7 @@ deliver([], _Delivery, _Flow) ->
     [];
 
 deliver(Qs, Delivery, Flow) ->
+    %% 得到Master和Slave的进程
     {MPids, SPids} = qpids(Qs),
     QPids = MPids ++ SPids,
     case Flow of
