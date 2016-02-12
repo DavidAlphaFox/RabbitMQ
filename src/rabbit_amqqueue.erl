@@ -325,7 +325,9 @@ update(Name, Fun) ->
         [] ->
             not_found
     end.
-
+%% durable是true的时候
+%% 不单要存到rabbit_durable_queue不表中
+%% 还要存到rabbit_queue这个表中
 store_queue(Q = #amqqueue{durable = true}) ->
     ok = mnesia:write(rabbit_durable_queue,
                       Q#amqqueue{slave_pids      = [],

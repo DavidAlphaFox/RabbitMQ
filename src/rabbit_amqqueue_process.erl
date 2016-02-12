@@ -122,7 +122,7 @@ init_state(Q) ->
                status              = running,
                args_policy_version = 0},
     rabbit_event:init_stats_timer(State, #q.stats_timer).
-
+%% 如果不是排他队列
 init_it(Recover, From, State = #q{q = #amqqueue{exclusive_owner = none}}) ->
     init_it2(Recover, From, State);
 
@@ -154,7 +154,9 @@ init_it2(Recover, From, State = #q{q                   = Q,
         #amqqueue{} = Q1 ->
             case matches(Recover, Q, Q1) of
                 true ->
+                    %% 返回#amqqueue
                     send_reply(From, {new, Q}),
+                    %% 设置文件句柄回调
                     ok = file_handle_cache:register_callback(
                            rabbit_amqqueue, set_maximum_since_use, [self()]),
                     ok = rabbit_memory_monitor:register(

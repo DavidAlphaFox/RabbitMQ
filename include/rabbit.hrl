@@ -46,7 +46,7 @@
           scratches,    %% durable, explicitly updated via update_scratch/3
           policy,       %% durable, implicitly updated when policy changes
           decorators}). %% transient, recalculated in store/1 (i.e. recovery)
-
+%% 默认把Queue的名字作为key
 -record(amqqueue, {
           name, durable, auto_delete, exclusive_owner = none, %% immutable
           arguments,                   %% immutable
