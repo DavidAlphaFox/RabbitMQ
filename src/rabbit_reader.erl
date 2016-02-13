@@ -210,6 +210,7 @@ socket_op(Sock, Fun) ->
 %% 自己要处理trap_exit
 start_connection(Parent, HelperSup, Deb, Sock, SockTransform) ->
     process_flag(trap_exit, true),
+    %% 得到链接的地址和端口
     Name = case rabbit_net:connection_string(Sock, inbound) of
                {ok, Str}         -> Str;
                {error, enotconn} -> rabbit_net:fast_close(Sock),
@@ -963,6 +964,7 @@ handle_method0(#'connection.open'{virtual_host = VHostPath},
     ok = send_on_channel0(Sock, #'connection.open_ok'{}, Protocol),
     Conserve = rabbit_alarm:register(self(), {?MODULE, conserve_resources, []}),
     Throttle1 = Throttle#throttle{alarmed_by = Conserve},
+    %% 启动channel sup
     {ok, ChannelSupSupPid} =
         rabbit_connection_helper_sup:start_channel_sup_sup(SupPid),
     State1 = control_throttle(

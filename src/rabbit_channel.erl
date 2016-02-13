@@ -359,7 +359,7 @@ handle_cast({command, #'basic.consume_ok'{consumer_tag = CTag} = Msg}, State) ->
 handle_cast({command, Msg}, State) ->
     ok = send(Msg, State),
     noreply(State);
-
+%% Queue通过Channel向消费者发送消息
 handle_cast({deliver, _CTag, _AckReq, _Msg}, State = #ch{state = closing}) ->
     noreply(State);
 handle_cast({deliver, ConsumerTag, AckRequired,
@@ -1340,6 +1340,7 @@ handle_method(_MethodRecord, _Content, _State) ->
 %% We get the queue process to send the consume_ok on our behalf. This
 %% is for symmetry with basic.cancel - see the comment in that method
 %% for why.
+%% 进行消费订阅
 basic_consume(QueueName, NoAck, ConsumerPrefetch, ActualConsumerTag,
               ExclusiveConsume, Args, NoWait,
               State = #ch{conn_pid          = ConnPid,

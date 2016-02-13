@@ -123,7 +123,7 @@ count() -> lists:sum([Count || #cr{consumer_count = Count} <- all_ch_record()]).
 
 unacknowledged_message_count() ->
     lists:sum([queue:len(C#cr.acktags) || C <- all_ch_record()]).
-
+%% 添加消费者
 add(ChPid, CTag, NoAck, LimiterPid, LimiterActive, Prefetch, Args, IsEmpty,
     State = #state{consumers = Consumers,
                    use       = CUInfo}) ->
@@ -184,7 +184,7 @@ erase_ch(ChPid, State = #state{consumers = Consumers}) ->
 
 send_drained() -> [update_ch_record(send_drained(C)) || C <- all_ch_record()],
                   ok.
-
+%% 向消费者进行消息递送
 deliver(FetchFun, QName, State) -> deliver(FetchFun, QName, false, State).
 
 deliver(FetchFun, QName, ConsumersChanged,
@@ -204,9 +204,10 @@ deliver(FetchFun, QName, ConsumersChanged,
                             State#state{consumers = Tail})
             end
     end.
-
+%% 向消费者递送消息
 deliver_to_consumer(FetchFun, E = {ChPid, Consumer}, QName) ->
     C = lookup_ch(ChPid),
+    %% 是否是阻塞的
     case is_ch_blocked(C) of
         true  -> block_consumer(C, E),
                  undelivered;
@@ -428,7 +429,8 @@ credit_and_drain(C = #cr{ch_pid = ChPid, limiter = Limiter},
     end.
 
 tags(CList) -> [CTag || {_P, {_ChPid, #consumer{tag = CTag}}} <- CList].
-
+%% 真正的增加消费者
+%% 并且依据相应的优先级，加入到队列中
 add_consumer({ChPid, Consumer = #consumer{args = Args}}, Queue) ->
     Priority = case rabbit_misc:table_lookup(Args, <<"x-priority">>) of
                    {_, P} -> P;

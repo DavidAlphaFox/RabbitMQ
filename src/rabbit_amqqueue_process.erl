@@ -510,7 +510,7 @@ discard(#delivery{confirm = Confirm,
     {BQS1, MTC1}.
 
 run_message_queue(State) -> run_message_queue(false, State).
-
+%% 将消息发送给消费者
 run_message_queue(ActiveConsumersChanged, State) ->
     case is_empty(State) of
         true  -> maybe_notify_decorators(ActiveConsumersChanged, State);
@@ -625,7 +625,8 @@ requeue_and_run(AckTags, State = #q{backing_queue       = BQ,
     {_MsgIds, BQS1} = BQ:requeue(AckTags, BQS),
     {_Dropped, State1} = maybe_drop_head(State#q{backing_queue_state = BQS1}),
     run_message_queue(maybe_send_drained(WasEmpty, drop_expired_msgs(State1))).
-
+%% 从后端真正的队列中
+%% 获取相应的消息
 fetch(AckRequired, State = #q{backing_queue       = BQ,
                               backing_queue_state = BQS}) ->
     {Result, BQS1} = BQ:fetch(AckRequired, BQS),
@@ -993,7 +994,7 @@ handle_call({basic_get, ChPid, NoAck, LimiterPid}, _From,
             Msg = {QName, self(), AckTag, IsDelivered, Message},
             reply({ok, BQ:len(BQS), Msg}, State2)
     end;
-
+%% 进行消费
 handle_call({basic_consume, NoAck, ChPid, LimiterPid, LimiterActive,
              PrefetchCount, ConsumerTag, ExclusiveConsume, Args, OkMsg},
             _From, State = #q{consumers          = Consumers,

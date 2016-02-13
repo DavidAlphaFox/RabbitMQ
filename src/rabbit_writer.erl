@@ -283,7 +283,7 @@ assemble_frames(Channel, MethodRecord, Content, FrameMax, Protocol) ->
 tcp_send(Sock, Data) ->
     rabbit_misc:throw_on_error(inet_error,
                                fun () -> rabbit_net:send(Sock, Data) end).
-
+%% 内部发送数据，直接封包，然后用tcp_send发送
 internal_send_command(Sock, Channel, MethodRecord, Protocol) ->
     ok = tcp_send(Sock, assemble_frame(Channel, MethodRecord, Protocol)).
 
