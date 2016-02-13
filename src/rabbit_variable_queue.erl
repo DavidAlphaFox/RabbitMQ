@@ -1339,6 +1339,7 @@ remove_queue_entries1(
 maybe_write_msg_to_disk(_Force, MsgStatus = #msg_status {
                                   msg_on_disk = true }, _MSCState) ->
     MsgStatus;
+%% 如果是持久化的消息，必须写磁盘
 maybe_write_msg_to_disk(Force, MsgStatus = #msg_status {
                                  msg = Msg, msg_id = MsgId,
                                  is_persistent = IsPersistent }, MSCState)

@@ -642,6 +642,7 @@ client_read3(#msg_location { msg_id = MsgId, file = File }, Defer,
 %% 更新正在递送的ets数量
 client_update_flying(Diff, MsgId, #client_msstate { flying_ets = FlyingEts,
                                                     client_ref = CRef }) ->
+    %% Key是消息的ID和Client的Ref
     Key = {MsgId, CRef},
     case ets:insert_new(FlyingEts, {Key, Diff}) of
         true  -> ok;
