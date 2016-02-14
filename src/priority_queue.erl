@@ -37,7 +37,7 @@
 %% calls into the same function knowing that ordinary queues represent
 %% a base case.
 
-
+%% 优先级队列
 -module(priority_queue).
 
 -export([new/0, is_queue/1, is_empty/1, len/1, to_list/1, from_list/1,
