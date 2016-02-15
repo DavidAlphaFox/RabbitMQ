@@ -611,7 +611,7 @@ get_or_reopen(RefNewOrReopens) ->
     case partition_handles(RefNewOrReopens) of
         {OpenHdls, []} ->
             %% 处在打开的状态
-            %% 那么刻意直接返回了
+            %% 那么可以直接返回了
             {ok, [Handle || {_Ref, Handle} <- OpenHdls]};
         {OpenHdls, ClosedHdls} ->
             Oldest = oldest(get_age_tree(), fun () -> now() end),
@@ -690,7 +690,7 @@ put_handle(Ref, Handle = #handle { last_used_at = Then }) ->
     put({Ref, fhc_handle}, Handle #handle { last_used_at = Now }).
 
 with_age_tree(Fun) -> put_age_tree(Fun(get_age_tree())).
-
+%% 从进程字典中获得相应的树
 get_age_tree() ->
     case get(fhc_age_tree) of
         undefined -> gb_trees:empty();
@@ -937,7 +937,7 @@ handle_call({open, Pid, Requested, EldestUnusedSince}, From,
                  end;
         false -> {noreply, run_pending_item(Item, State)}
     end;
-
+%% 申请句柄
 handle_call({obtain, N, Type, Pid}, From,
             State = #fhc_state { clients = Clients }) ->
     Count = obtain_state(Type, count, State),
@@ -1291,7 +1291,7 @@ track_client(Pid, Clients) ->
         false -> ok
     end.
 
-
+%% 通过system_info获得最大句柄数量
 %% To increase the number of file descriptors: on Windows set ERL_MAX_PORTS
 %% environment variable, on Linux set `ulimit -n`.
 ulimit() ->
