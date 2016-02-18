@@ -614,6 +614,7 @@ get_or_reopen(RefNewOrReopens) ->
             %% 那么可以直接返回了
             {ok, [Handle || {_Ref, Handle} <- OpenHdls]};
         {OpenHdls, ClosedHdls} ->
+            %% 获得调用者进程的文件句柄LRU缓存
             Oldest = oldest(get_age_tree(), fun () -> now() end),
             case gen_server2:call(?SERVER, {open, self(), length(ClosedHdls),
                                             Oldest}, infinity) of
@@ -624,6 +625,9 @@ get_or_reopen(RefNewOrReopens) ->
                         Error          -> Error
                     end;
                 close ->
+                    %% 软关闭文件
+                    %% Handle本身是关闭状态的时候，不会做什么的
+                    %% 只有在打开的状态中才会这么做
                     [soft_close(Ref, Handle) ||
                         {{Ref, fhc_handle}, Handle = #handle { hdl = Hdl }} <-
                             get(),
@@ -638,7 +642,8 @@ reopen([], Tree, RefHdls) ->
     put_age_tree(Tree),
     {ok, lists:reverse(RefHdls)};
 %% 在reopen中进行实际的打开
-%% 实际上还是在调用进程中进行的    
+%% 实际上还是在调用进程中进行的 
+%% 前提是在file_handle_cache中已经获得了权限   
 reopen([{Ref, NewOrReopen, Handle = #handle { hdl          = closed,
                                               path         = Path,
                                               mode         = Mode,
@@ -731,7 +736,8 @@ oldest(Tree, DefaultFun) ->
         false -> {Oldest, _Ref} = gb_trees:smallest(Tree),
                  Oldest
     end.
-
+%% 现在调用者的进程字典中放入一个Ref
+%% 这个Ref对应的handle信息中，文件是关闭的
 new_closed_handle(Path, Mode, Options) ->
     WriteBufferSize =
         case proplists:get_value(write_buffer, Options, unbuffered) of

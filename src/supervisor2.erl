@@ -290,6 +290,9 @@ which_children(Supervisor) ->
 count_children(Supervisor) ->
     call(Supervisor, count_children).
 
+%% 直接使用which_children找出supervisor下面的所有子进程
+%% 然后用推倒式直接找出和指定原子匹配的进程Pid
+%% 这里面并没有改which_children的代码
 -ifdef(use_specs).
 -spec find_child(Supervisor, Name) -> [pid()] when
       Supervisor :: sup_ref(),

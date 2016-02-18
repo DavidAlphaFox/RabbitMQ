@@ -1549,6 +1549,7 @@ recover_file_summary(false, _Dir) ->
                     [ordered_set, public, {keypos, #file_summary.file}])};
 recover_file_summary(true, Dir) ->
     Path = filename:join(Dir, ?FILE_SUMMARY_FILENAME),
+    %% 从文件中恢复消息文件的摘要信息
     case ets:file2tab(Path) of
         {ok, Tid}       -> ok = file:delete(Path),
                            {true, Tid};
