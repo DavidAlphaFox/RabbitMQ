@@ -675,7 +675,7 @@ basic_cancel(#amqqueue{pid = QPid}, ChPid, ConsumerTag, OkMsg) ->
 
 notify_decorators(#amqqueue{pid = QPid}) ->
     delegate:cast(QPid, notify_decorators).
-
+%% 通知队列已经发送
 notify_sent(QPid, ChPid) ->
     Key = {consumer_credit_to, QPid},
     put(Key, case get(Key) of

@@ -111,7 +111,7 @@ publish(X, Delivery) ->
     Qs = rabbit_amqqueue:lookup(rabbit_exchange:route(X, Delivery)),
     DeliveredQPids = rabbit_amqqueue:deliver(Qs, Delivery),
     {ok, DeliveredQPids}.
-
+%% 生成delivery结构
 delivery(Mandatory, Confirm, Message, MsgSeqNo) ->
     #delivery{mandatory = Mandatory, confirm = Confirm, sender = self(),
               message = Message, msg_seq_no = MsgSeqNo}.
@@ -153,7 +153,7 @@ strip_header(#content{properties = Props = #'P_basic'{headers = Headers}}
                               properties = Props#'P_basic'{
                                              headers = Headers0}})
     end.
-
+%% 创建Message结构
 message(XName, RoutingKey, #content{properties = Props} = DecodedContent) ->
     try
         {ok, #basic_message{

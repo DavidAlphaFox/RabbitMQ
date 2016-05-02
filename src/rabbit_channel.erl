@@ -790,8 +790,11 @@ handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
             true  -> SeqNo = State#ch.publish_seqno,
                      {SeqNo, State#ch{publish_seqno = SeqNo + 1}}
         end,
+    %% 解析完得到相应的message    
     case rabbit_basic:message(ExchangeName, RoutingKey, DecodedContent) of
         {ok, Message} ->
+            %% 消息正常，记录
+            %% 然后派发
             rabbit_trace:tap_in(Message, ConnName, ChannelNum,
                                 Username, TraceState),
             Delivery = rabbit_basic:delivery(

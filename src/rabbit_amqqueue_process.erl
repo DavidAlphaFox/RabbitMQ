@@ -644,7 +644,8 @@ ack(AckTags, ChPid, State) ->
 requeue(AckTags, ChPid, State) ->
     subtract_acks(ChPid, AckTags, State,
                   fun (State1) -> requeue_and_run(AckTags, State1) end).
-
+%% 解除队列的限制
+%% 主要是进行流量控制
 possibly_unblock(Update, ChPid, State = #q{consumers = Consumers}) ->
     case rabbit_queue_consumers:possibly_unblock(Update, ChPid, Consumers) of
         unchanged               -> State;
