@@ -83,7 +83,7 @@ read(FileHdl, TotalSize) ->
 
 scan(FileHdl, FileSize, Fun, Acc) when FileSize >= 0 ->
     scan(FileHdl, FileSize, <<>>, 0, 0, Fun, Acc).
-
+%% 已经扫描到文件底部了
 scan(_FileHdl, FileSize, _Data, FileSize, ScanOffset, _Fun, Acc) ->
     {ok, Acc, ScanOffset};
 scan(FileHdl, FileSize, Data, ReadOffset, ScanOffset, Fun, Acc) ->
@@ -102,6 +102,7 @@ scanner(<<>>, Offset, _Fun, Acc) ->
     {<<>>, Acc, Offset};
 scanner(<<0:?INTEGER_SIZE_BITS, _Rest/binary>>, Offset, _Fun, Acc) ->
     {<<>>, Acc, Offset}; %% Nothing to do other than stop.
+%% 读取到了相应的数据大小
 scanner(<<Size:?INTEGER_SIZE_BITS, MsgIdAndMsg:Size/binary,
           WriteMarker:?WRITE_OK_SIZE_BITS, Rest/binary>>, Offset, Fun, Acc) ->
     TotalSize = Size + ?FILE_PACKING_ADJUSTMENT,

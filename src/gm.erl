@@ -573,7 +573,9 @@ init([GroupName, Module, Args, TxnFun]) ->
     put(process_name, {?MODULE, GroupName}),
     {MegaSecs, Secs, MicroSecs} = now(),
     random:seed(MegaSecs, Secs, MicroSecs),
+		%% 自己的版本
     Self = make_member(GroupName),
+		%% 向自己广播加入通知
     gen_server2:cast(self(), join),
     {ok, #state { self                = Self,
                   left                = {Self, undefined},
@@ -1111,7 +1113,7 @@ join_group(Self, GroupName, #gm_group { members = Members } = Group, TxnFun) ->
                                   TxnFun)
                         end,
                     try
-                    	%% 像左侧进程发消息，告诉对方当前进程是新的右侧进程
+                    	%% 向左侧进程发消息，告诉对方当前进程是新的右侧进程
                         case neighbour_call(Left, {add_on_right, Self}) of
                             {ok, Group1} -> group_to_view(Group1);
                             not_ready    -> join_group(Self, GroupName, TxnFun)

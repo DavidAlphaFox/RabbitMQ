@@ -1611,7 +1611,7 @@ recover_crashed_compaction(Dir, TmpFileName, NonTmpRelatedFileName) ->
     ok = file_handle_cache:close(MainHdl),
     ok = file_handle_cache:delete(TmpHdl),
     ok.
-
+%% 扫描指定的文件来获取有效信息
 scan_file_for_valid_messages(Dir, FileName) ->
     case open_file(Dir, FileName, ?READ_MODE) of
         {ok, Hdl}       -> Valid = rabbit_msg_file:scan(
@@ -1623,7 +1623,7 @@ scan_file_for_valid_messages(Dir, FileName) ->
         {error, enoent} -> {ok, [], 0};
         {error, Reason} -> {error, {unable_to_scan_file, FileName, Reason}}
     end.
-
+%% 合并文件扫描产生的数据
 scan_fun({MsgId, TotalSize, Offset, _Msg}, Acc) ->
     [{MsgId, TotalSize, Offset} | Acc].
 
@@ -1692,6 +1692,7 @@ build_index(Gatherer, Left, [],
     end;
 build_index(Gatherer, Left, [File|Files], State) ->
     ok = gatherer:fork(Gatherer),
+		%% 向worker_pool提交索引构建任务
     ok = worker_pool:submit_async(
            fun () -> build_index_worker(Gatherer, State,
                                         Left, File, Files)
