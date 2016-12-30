@@ -1059,7 +1059,7 @@ handle_method(#'basic.recover'{requeue = Requeue}, Content, State) ->
 handle_method(#'basic.reject'{delivery_tag = DeliveryTag, requeue = Requeue},
               _, State) ->
     reject(DeliveryTag, Requeue, false, State);
-
+%% 声明一个exchange
 handle_method(#'exchange.declare'{exchange    = ExchangeNameBin,
                                   type        = TypeNameBin,
                                   passive     = false,
@@ -1145,6 +1145,7 @@ handle_method(#'exchange.unbind'{destination = DestinationNameBin,
 
 %% Note that all declares to these are effectively passive. If it
 %% exists it by definition has one consumer.
+%% 临时队列
 handle_method(#'queue.declare'{queue   = <<"amq.rabbitmq.reply-to",
                                            _/binary>> = QueueNameBin,
                                nowait  = NoWait}, _,
