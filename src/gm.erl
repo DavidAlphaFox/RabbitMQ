@@ -163,7 +163,9 @@
 %% every member of the group. The message is now dead, and any new
 %% member joining the group at this point will not receive the
 %% message.
-%%
+%% 当A收到了自己发送的消息之后，就可以发送ack消息给B
+%% B接着丢弃消息，并将ack传递给C直至ack消息再次返回给A
+%% 至此，A已经可以确定消息已经被群组内所有成员接收过一次了，自此新加入的成员不会收到该消息
 %% We therefore have two roles:
 %%
 %% 1. The sender, who upon receiving their own messages back, must
