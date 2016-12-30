@@ -117,7 +117,7 @@
 -endif.
 
 %%----------------------------------------------------------------------------
-
+%% 启动一个Channel需要Reader,Writer和链接个进程
 start_link(Channel, ReaderPid, WriterPid, ConnPid, ConnName, Protocol, User,
            VHost, Capabilities, CollectorPid, Limiter) ->
     gen_server2:start_link(
@@ -232,8 +232,11 @@ force_event_refresh(Ref) ->
 
 init([Channel, ReaderPid, WriterPid, ConnPid, ConnName, Protocol, User, VHost,
       Capabilities, CollectorPid, LimiterPid]) ->
+		%% 自身追踪异常退出
     process_flag(trap_exit, true),
+		%% 保存链接相关的信息
     ?store_proc_name({ConnName, Channel}),
+		%% 将自己加入rabbit_channels的广播组中
     ok = pg_local:join(rabbit_channels, self()),
     State = #ch{state                   = starting,
                 protocol                = Protocol,
@@ -245,6 +248,7 @@ init([Channel, ReaderPid, WriterPid, ConnPid, ConnName, Protocol, User, VHost,
                 limiter                 = rabbit_limiter:new(LimiterPid),
                 tx                      = none,
                 next_tag                = 1,
+								%% 没进行ack的消息队列
                 unacked_message_q       = queue:new(),
                 user                    = User,
                 virtual_host            = VHost,
@@ -264,7 +268,9 @@ init([Channel, ReaderPid, WriterPid, ConnPid, ConnName, Protocol, User, VHost,
                 trace_state             = rabbit_trace:init(VHost),
                 consumer_prefetch       = 0,
                 reply_consumer          = none},
+		%% 创建时间统计的记时器
     State1 = rabbit_event:init_stats_timer(State, #ch.stats_timer),
+		%% 通知channel被创建
     rabbit_event:notify(channel_created, infos(?CREATION_EVENT_KEYS, State1)),
     rabbit_event:if_enabled(State1, #ch.stats_timer,
                             fun() -> emit_stats(State1) end),
@@ -325,10 +331,12 @@ handle_cast({method, Method, Content, Flow},
         flow   -> credit_flow:ack(Reader);
         noflow -> ok
     end,
+		%% channel的拦截器
     try handle_method(rabbit_channel_interceptor:intercept_method(
                         expand_shortcuts(Method, State), VHost),
                       Content, State) of
         {reply, Reply, NewState} ->
+						%% 将处理的结果发送回客户端
             ok = send(Reply, NewState),
             noreply(NewState);
         {noreply, NewState} ->
@@ -509,6 +517,7 @@ ok_msg(false, Msg) -> Msg.
 send(_Command, #ch{state = closing}) ->
     ok;
 send(Command, #ch{writer_pid = WriterPid}) ->
+		%% 使用rabbit_writter将消息写到客户端去
     ok = rabbit_writer:send_command(WriterPid, Command).
 
 handle_exception(Reason, State = #ch{protocol     = Protocol,
@@ -612,6 +621,7 @@ check_internal_exchange(_) ->
 
 check_msg_size(Content) ->
     Size = rabbit_basic:maybe_gc_large_msg(Content),
+		%% 检查大小是否超过限制
     case Size > ?MAX_MSG_SIZE of
         true  -> precondition_failed("message size ~B larger than max size ~B",
                                      [Size, ?MAX_MSG_SIZE]);
@@ -706,12 +716,14 @@ record_confirms([], State) ->
     State;
 record_confirms(MXs, State = #ch{confirmed = C}) ->
     State#ch{confirmed = [MXs | C]}.
-
+%% 处理channel上的操作
 handle_method(#'channel.open'{}, _, State = #ch{state = starting}) ->
     %% Don't leave "starting" as the state for 5s. TODO is this TRTTD?
+		%% 从channel的starting状态转化到running状态
     State1 = State#ch{state = running},
     rabbit_event:if_enabled(State1, #ch.stats_timer,
                             fun() -> emit_stats(State1) end),
+		%% 回复channel.open_ok消息
     {reply, #'channel.open_ok'{}, State1};
 
 handle_method(#'channel.open'{}, _, _State) ->
@@ -731,7 +743,7 @@ handle_method(#'channel.close'{}, _, State = #ch{writer_pid = WriterPid,
 
 handle_method(_Method, _, State = #ch{state = closing}) ->
     {noreply, State};
-
+%% 关闭channel
 handle_method(#'channel.close'{}, _, State = #ch{reader_pid = ReaderPid}) ->
     {ok, State1} = notify_queues(State),
     %% We issue the channel.close_ok response after a handshake with
@@ -760,7 +772,7 @@ handle_method(#'access.request'{},_, State) ->
 
 handle_method(#'basic.publish'{immediate = true}, _Content, _State) ->
     rabbit_misc:protocol_error(not_implemented, "immediate=true", []);
-
+%% 广播消息
 handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
                                routing_key = RoutingKey,
                                mandatory   = Mandatory},
@@ -771,8 +783,11 @@ handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
                                    trace_state     = TraceState,
                                    user            = #user{username = Username},
                                    conn_name       = ConnName}) ->
-    check_msg_size(Content),
+    %% 检查消息大小
+		check_msg_size(Content),
+		%% 获取exchange的名称
     ExchangeName = rabbit_misc:r(VHostPath, exchange, ExchangeNameBin),
+		%% 检查写权限
     check_write_permitted(ExchangeName, State),
     Exchange = rabbit_exchange:lookup_or_die(ExchangeName),
     check_internal_exchange(Exchange),
@@ -797,8 +812,10 @@ handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
             %% 然后派发
             rabbit_trace:tap_in(Message, ConnName, ChannelNum,
                                 Username, TraceState),
+						%% 创建可以Delivery的包
             Delivery = rabbit_basic:delivery(
                          Mandatory, DoConfirm, Message, MsgSeqNo),
+						%% 得到Queue的名字
             QNames = rabbit_exchange:route(Exchange, Delivery),
             DQ = {Delivery, QNames},
             {noreply, case Tx of
@@ -1674,7 +1691,8 @@ deliver_to_queues({Delivery = #delivery{message    = Message = #basic_message{
                                         msg_seq_no = MsgSeqNo},
                    DelQNames}, State = #ch{queue_names    = QNames,
                                            queue_monitors = QMons}) ->
-    Qs = rabbit_amqqueue:lookup(DelQNames),
+    %% 找到Queues的Pid
+		Qs = rabbit_amqqueue:lookup(DelQNames),
     DeliveredQPids = rabbit_amqqueue:deliver_flow(Qs, Delivery),
     %% The pmon:monitor_all/2 monitors all queues to which we
     %% delivered. But we want to monitor even queues we didn't deliver

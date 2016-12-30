@@ -256,7 +256,6 @@ send_command_and_notify(W, Q, ChPid, MethodRecord) ->
 send_command_and_notify(W, Q, ChPid, MethodRecord, Content) ->
     W ! {send_command_and_notify, Q, ChPid, MethodRecord, Content},
     ok.
-
 flush(W) -> call(W, flush).
 
 %%---------------------------------------------------------------------------
@@ -266,7 +265,7 @@ call(Pid, Msg) ->
     Res.
 
 %%---------------------------------------------------------------------------
-
+%% 将相应的操作方法或者记录组装成相应的frame
 assemble_frame(Channel, MethodRecord, Protocol) ->
     rabbit_binary_generator:build_simple_method_frame(
       Channel, MethodRecord, Protocol).
@@ -285,6 +284,7 @@ tcp_send(Sock, Data) ->
                                fun () -> rabbit_net:send(Sock, Data) end).
 %% 内部发送数据，直接封包，然后用tcp_send发送
 internal_send_command(Sock, Channel, MethodRecord, Protocol) ->
+		%% 先进行数据组装
     ok = tcp_send(Sock, assemble_frame(Channel, MethodRecord, Protocol)).
 
 internal_send_command(Sock, Channel, MethodRecord, Content, FrameMax,

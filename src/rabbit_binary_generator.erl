@@ -57,11 +57,16 @@
 -endif.
 
 %%----------------------------------------------------------------------------
-
+%% 构建简单操作结果的frame
+%% 
 build_simple_method_frame(ChannelInt, MethodRecord, Protocol) ->
+		%% 使用特定版本构建操作方法的记录
     MethodFields = Protocol:encode_method_fields(MethodRecord),
+		%% 得到操作方法的名字
     MethodName = rabbit_misc:method_record_type(MethodRecord),
+		%% 得到操作方法的ID
     {ClassId, MethodId} = Protocol:method_id(MethodName),
+		%% 创建frame
     create_frame(1, ChannelInt, [<<ClassId:16, MethodId:16>>, MethodFields]).
 
 build_simple_content_frames(ChannelInt, Content, FrameMax, Protocol) ->
@@ -110,6 +115,8 @@ build_heartbeat_frame() ->
     create_frame(?FRAME_HEARTBEAT, 0, <<>>).
 
 create_frame(TypeInt, ChannelInt, Payload) ->
+		%% 类型，channel号
+		%% 内容长度，内容，frame的结尾
     [<<TypeInt:8, ChannelInt:16, (iolist_size(Payload)):32>>, Payload,
      ?FRAME_END].
 

@@ -287,7 +287,7 @@ protocol_error(Name, ExplanationFormat, Params) ->
 
 protocol_error(Name, ExplanationFormat, Params, Method) ->
     protocol_error(amqp_error(Name, ExplanationFormat, Params, Method)).
-
+%% 直接退出
 protocol_error(#amqp_error{} = Error) ->
     exit(Error).
 
