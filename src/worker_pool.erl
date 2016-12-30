@@ -91,6 +91,7 @@ handle_call({next_free, CPid}, From, State = #state { available = [],
      hibernate};
 handle_call({next_free, CPid}, _From, State = #state { available =
                                                            [WPid | Avail1] }) ->
+		%% 拿到工作进程WPid
     worker_pool_worker:next_job_from(WPid, CPid),
     {reply, WPid, State #state { available = Avail1 }, hibernate};
 
@@ -98,6 +99,7 @@ handle_call(Msg, _From, State) ->
     {stop, {unexpected_call, Msg}, State}.
 
 handle_cast({ready, WPid}, State) ->
+		%% 监控worker
     erlang:monitor(process, WPid),
     handle_cast({idle, WPid}, State);
 
@@ -106,16 +108,19 @@ handle_cast({idle, WPid}, State = #state { available = Avail,
     {noreply,
      case queue:out(Pending) of
          {empty, _Pending} ->
+						 %% 没有任何工作，让WPid进入avaliable中
              State #state { available = ordsets:add_element(WPid, Avail) };
          {{value, {next_free, From, CPid}}, Pending1} ->
+						 %% 将工作交给WPid
              worker_pool_worker:next_job_from(WPid, CPid),
              gen_server2:reply(From, WPid),
              State #state { pending = Pending1 };
          {{value, {run_async, Fun}}, Pending1} ->
+						 %% 异步执行Fun
              worker_pool_worker:submit_async(WPid, Fun),
              State #state { pending = Pending1 }
      end, hibernate};
-
+%% 提交一个异步任务给工作池
 handle_cast({run_async, Fun}, State = #state { available = [],
                                                pending   = Pending }) ->
     {noreply, State #state { pending = queue:in({run_async, Fun}, Pending)},

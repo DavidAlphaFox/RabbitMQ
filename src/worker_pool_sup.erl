@@ -44,7 +44,7 @@ start_link(WCount) ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, [WCount]).
 
 %%----------------------------------------------------------------------------
-
+%% 启动多个worker和一个worker_pool
 init([WCount]) ->
     {ok, {{one_for_one, 10, 10},
           [{worker_pool, {worker_pool, start_link, []}, transient,

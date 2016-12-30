@@ -52,7 +52,7 @@ start_link() ->
 
 next_job_from(Pid, CPid) ->
     gen_server2:cast(Pid, {next_job_from, CPid}).
-
+%% 向工作进程提交工作函数和模型
 submit(Pid, Fun, ProcessModel) ->
     gen_server2:call(Pid, {submit, Fun, self(), ProcessModel}, infinity).
 
@@ -84,6 +84,7 @@ run(Fun, single) ->
 init([]) ->
     ok = file_handle_cache:register_callback(?MODULE, set_maximum_since_use,
                                              [self()]),
+		%% 向worker_pool注册自己
     ok = worker_pool:ready(self()),
     put(worker_pool_worker, true),
     {ok, undefined, hibernate,

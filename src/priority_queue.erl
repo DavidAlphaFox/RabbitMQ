@@ -104,26 +104,35 @@ to_list({pqueue, Queues}) ->
 
 from_list(L) ->
     lists:foldl(fun ({P, E}, Q) -> in(E, P, Q) end, new(), L).
-
+%% 数据放入队列
 in(Item, Q) ->
     in(Item, 0, Q).
-
+%% 队列只有一个数据在Right
 in(X, 0, {queue, [_] = In, [], 1}) ->
     {queue, [X], In, 2};
+%% 将数据直接放在Right
 in(X, 0, {queue, In, Out, Len}) when is_list(In), is_list(Out) ->
     {queue, [X|In], Out, Len + 1};
+%% 数据带有优先级，并且Q是基本Queue,且Queue没有数据
 in(X, Priority, _Q = {queue, [], [], 0}) ->
     in(X, Priority, {pqueue, []});
+%% 数据带有优先级，并且Q为基本Queue,且Queue有数据
 in(X, Priority, Q = {queue, _, _, _}) ->
     in(X, Priority, {pqueue, [{0, Q}]});
+
 in(X, Priority, {pqueue, Queues}) ->
+		%% 计算负值的优先级
     P = maybe_negate_priority(Priority),
     {pqueue, case lists:keysearch(P, 1, Queues) of
                  {value, {_, Q}} ->
+										 %% 将数据加入到指定的Queue中，并替换相应的Queue
                      lists:keyreplace(P, 1, Queues, {P, in(X, Q)});
                  false when P == infinity ->
+										 %% 增加优先级为无限大的Queue
                      [{P, {queue, [X], [], 1}} | Queues];
                  false ->
+										 %% 添加一个新的Queue
+										 %% infinity的Queue是不参加排序的
                      case Queues of
                          [{infinity, InfQueue} | Queues1] ->
                              [{infinity, InfQueue} |
@@ -132,6 +141,7 @@ in(X, Priority, {pqueue, Queues}) ->
                              lists:keysort(1, [{P, {queue, [X], [], 1}} | Queues])
                      end
              end}.
+%% 在Left不出光的情况下，是不会再从Right中拿数据的
 
 out({queue, [], [], 0} = Q) ->
     {empty, Q};
