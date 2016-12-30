@@ -755,6 +755,7 @@ handle_method(#'channel.close'{}, _, State = #ch{reader_pid = ReaderPid}) ->
     %% close_ok, might be received by the reader before it has seen
     %% the termination and hence be sent to the old, now dead/dying
     %% channel process, instead of a new process, and thus lost.
+		%% 向Reader发送消息
     ReaderPid ! {channel_closing, self()},
     {noreply, State1};
 
@@ -762,6 +763,7 @@ handle_method(#'channel.close'{}, _, State = #ch{reader_pid = ReaderPid}) ->
 %% while waiting for the reply to a synchronous command, we generally
 %% do allow this...except in the case of a pending tx.commit, where
 %% it could wreak havoc.
+%% 在处理同步事务的时候，我们并不期望其它的消息
 handle_method(_Method, _, #ch{tx = Tx})
   when Tx =:= committing orelse Tx =:= failed ->
     rabbit_misc:protocol_error(
@@ -826,12 +828,12 @@ handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
         {error, Reason} ->
             precondition_failed("invalid message: ~p", [Reason])
     end;
-
+%% 拒绝的消息
 handle_method(#'basic.nack'{delivery_tag = DeliveryTag,
                             multiple     = Multiple,
                             requeue      = Requeue}, _, State) ->
     reject(DeliveryTag, Requeue, Multiple, State);
-
+%% 接受相关消息
 handle_method(#'basic.ack'{delivery_tag = DeliveryTag,
                            multiple     = Multiple},
               _, State = #ch{unacked_message_q = UAMQ, tx = Tx}) ->
@@ -874,7 +876,7 @@ handle_method(#'basic.get'{queue = QueueNameBin, no_ack = NoAck},
         empty ->
             {reply, #'basic.get_empty'{}, State}
     end;
-%% 消费者
+%% 消费监听，特定Queue
 handle_method(#'basic.consume'{queue        = <<"amq.rabbitmq.reply-to">>,
                                consumer_tag = CTag0,
                                no_ack       = NoAck,
@@ -915,7 +917,7 @@ handle_method(#'basic.consume'{queue        = <<"amq.rabbitmq.reply-to">>,
             rabbit_misc:protocol_error(
               not_allowed, "attempt to reuse consumer tag '~s'", [CTag0])
     end;
-
+%% 取消消费监听
 handle_method(#'basic.cancel'{consumer_tag = ConsumerTag, nowait = NoWait},
               _, State = #ch{reply_consumer = {ConsumerTag, _, _}}) ->
     State1 = State#ch{reply_consumer = none},
@@ -938,6 +940,8 @@ handle_method(#'basic.consume'{queue        = QueueNameBin,
         error ->
             QueueName = qbin_to_resource(QueueNameBin, State),
             check_read_permitted(QueueName, State),
+						%% 如果客户端没指定tag的时候
+						%% 服务端会指定一个tag
             ActualConsumerTag =
                 case ConsumerTag of
                     <<>>  -> rabbit_guid:binary(rabbit_guid:gen_secure(),
@@ -1375,6 +1379,8 @@ basic_consume(QueueName, NoAck, ConsumerPrefetch, ActualConsumerTag,
                       rabbit_limiter:is_active(Limiter),
                       ConsumerPrefetch, ActualConsumerTag,
                       ExclusiveConsume, Args,
+											%% 返回成功消息
+											%% 并包含订阅用的tag
                       ok_msg(NoWait, #'basic.consume_ok'{
                                consumer_tag = ActualConsumerTag})),
                     Q}
