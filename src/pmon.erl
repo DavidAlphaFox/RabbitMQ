@@ -51,7 +51,8 @@ new() -> new(erlang).
 
 new(Module) -> #state{dict   = dict:new(),
                       module = Module}.
-
+%% 将监控信息放入其中
+%% 其中包括相应模块使用相应的Module的monitor函数进行监控
 monitor(Item, S = #state{dict = M, module = Module}) ->
     case dict:is_key(Item, M) of
         true  -> S;
