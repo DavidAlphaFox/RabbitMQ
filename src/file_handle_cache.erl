@@ -105,6 +105,9 @@
 %% would mean that the average will never cause any file handles to
 %% be closed, the server can send out an average age of 0, resulting
 %% in all available clients closing all their file handles.)
+%% 
+%% 当达到限制后，该进程会计算所有客户端最后打开并使用的句柄的平均生命周期
+%% 然后该进程会让所有的客户端关闭生命周期小于平均周期的句柄
 %%
 %% Care is taken to ensure that (a) processes which are blocked
 %% waiting for file descriptors to become available are not sent
@@ -304,6 +307,7 @@ open(Path, Mode, Options) ->
     %% 得到文件的绝对路径
     Path1 = filename:absname(Path),
     %% 从管理器中拿到文件的虚拟句柄
+		%% 这里面使用的是进程的字典
     File1 = #file { reader_count = RCount, has_writer = HasWriter } =
         case get({Path1, fhc_file}) of
             File = #file {} -> File;
@@ -656,6 +660,7 @@ reopen([{Ref, NewOrReopen, Handle = #handle { hdl          = closed,
                               end) of
         {ok, Hdl} ->
             Now = now(),
+						%% 打开后更新最后使用时间
             {{ok, _Offset}, Handle1} =
                 maybe_seek(Offset, Handle #handle { hdl          = Hdl,
                                                     offset       = 0,
@@ -914,7 +919,7 @@ prioritise_cast(Msg, _Len, _State) ->
         {release, _, _, _}           -> 5;
         _                            -> 0
     end.
-
+%% 服务进程处理open请求
 handle_call({open, Pid, Requested, EldestUnusedSince}, From,
             State = #fhc_state { open_count   = Count,
                                  open_pending = Pending,
