@@ -130,18 +130,25 @@ init_it(Recover, From, State = #q{q = #amqqueue{exclusive_owner = none}}) ->
 %% need to still tidy up after that case, there could be the remnants
 %% of one left over from an upgrade. So that's why we don't enforce
 %% Recover = new here.
+%% 排他队列
 init_it(Recover, From, State = #q{q = #amqqueue{exclusive_owner = Owner}}) ->
+		%% 确认进程的存活
     case rabbit_misc:is_process_alive(Owner) of
         true  -> erlang:monitor(process, Owner),
+								 %% 做好监控后进入第二阶段的初始化
                  init_it2(Recover, From, State);
         false -> #q{backing_queue       = undefined,
                     backing_queue_state = undefined,
                     q                   = Q} = State,
                  send_reply(From, {owner_died, Q}),
+								 %% 获取真正队列模块
                  BQ = backing_queue_module(Q),
+								 %% 获取恢复状态
                  {_, Terms} = recovery_status(Recover),
+								 %% 初始化队列
                  BQS = bq_init(BQ, Q, Terms),
                  %% Rely on terminate to delete the queue.
+								 %% 结束掉该队列
                  {stop, {shutdown, missing_owner},
                   State#q{backing_queue = BQ, backing_queue_state = BQS}}
     end.
