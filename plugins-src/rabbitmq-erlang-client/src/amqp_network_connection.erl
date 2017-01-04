@@ -13,7 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% 通过网络模式
 %% @private
 -module(amqp_network_connection).
 
@@ -55,6 +55,7 @@ do(Method, State) ->
 
 do2(Method, #state{writer0 = Writer}) ->
     %% Catching because it expects the {channel_exit, _, _} message on error
+		%% RabbitMQ的写进程，发送同步的命令
     catch rabbit_writer:send_command_sync(Writer, Method).
 
 handle_message(socket_closing_timeout,
@@ -116,7 +117,7 @@ connect(AmqpParams = #amqp_params_network{host = Host}, SIF, TypeSup, State) ->
         [AF|_] -> do_connect(
                     AF, AmqpParams, SIF, State#state{type_sup = TypeSup})
     end.
-
+%% 进行链接
 do_connect({Addr, Family},
            AmqpParams = #amqp_params_network{ssl_options        = none,
                                              port               = Port,
@@ -124,6 +125,7 @@ do_connect({Addr, Family},
                                              socket_options     = ExtraOpts},
            SIF, State) ->
     obtain(),
+		%% 链接RabbitServer
     case gen_tcp:connect(Addr, Port,
                          [Family | ?RABBIT_TCP_OPTS] ++ ExtraOpts,
                          Timeout) of
@@ -171,8 +173,9 @@ gethostaddr(Host) ->
     Lookups = [{Family, inet:getaddr(Host, Family)}
                || Family <- inet_address_preference()],
     [{IP, Family} || {Family, {ok, IP}} <- Lookups].
-
+%% 进行握手
 try_handshake(AmqpParams, SIF, State = #state{sock = Sock}) ->
+		%% 得到链接名称
     Name = case rabbit_net:connection_string(Sock, outbound) of
                {ok, Str}  -> list_to_binary(Str);
                {error, _} -> <<"unknown">>
@@ -184,18 +187,22 @@ try_handshake(AmqpParams, SIF, State = #state{sock = Sock}) ->
     end.
 
 handshake(AmqpParams, SIF, State0 = #state{sock = Sock}) ->
+		%% 发送协议头
     ok = rabbit_net:send(Sock, ?PROTOCOL_HEADER),
     network_handshake(AmqpParams, start_infrastructure(SIF, State0)).
-
+%% 启动基础设施，在tcp上建立控制Cchannel，Cahnnel0
 start_infrastructure(SIF, State = #state{sock = Sock, name = Name}) ->
     {ok, ChMgr, Writer} = SIF(Sock, Name),
     {ChMgr, State#state{writer0 = Writer}}.
 
 network_handshake(AmqpParams = #amqp_params_network{virtual_host = VHost},
                   {ChMgr, State0}) ->
+		%% Start的数据结构
     Start = #'connection.start'{server_properties = ServerProperties,
                                 mechanisms = Mechanisms} =
+				%% 等待接收connection.start
         handshake_recv('connection.start'),
+		%% 检查版本
     ok = check_version(Start),
     case login(AmqpParams, Mechanisms, State0) of
         {closing, #amqp_error{}, _Error} = Err ->
@@ -212,10 +219,11 @@ network_handshake(AmqpParams = #amqp_params_network{virtual_host = VHost},
                                                                 AmqpError, Error}
             end
     end.
-
+%% 匹配9.0版本
 check_version(#'connection.start'{version_major = ?PROTOCOL_VERSION_MAJOR,
                                   version_minor = ?PROTOCOL_VERSION_MINOR}) ->
     ok;
+%% 不支持8.0或其他版本
 check_version(#'connection.start'{version_major = 8,
                                   version_minor = 0}) ->
     exit({protocol_version_mismatch, 0, 8});
@@ -261,7 +269,7 @@ start_heartbeat(#state{sock      = Sock,
     ReceiveFun = fun () -> Connection ! heartbeat_timeout end,
     rabbit_heartbeat:start(
       Sup, Sock, Name, Heartbeat, SendFun, Heartbeat, ReceiveFun).
-
+%% 登陆Rabbit的Server
 login(Params = #amqp_params_network{auth_mechanisms = ClientMechanisms,
                                     client_properties = UserProps},
       ServerMechanismsStr, State) ->

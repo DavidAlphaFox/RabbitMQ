@@ -150,7 +150,7 @@ callback(Function, Params, State = #state{module = Mod,
 %%---------------------------------------------------------------------------
 %% gen_server callbacks
 %%---------------------------------------------------------------------------
-
+%% 启动了一个链接
 init({TypeSup, AMQPParams}) ->
     %% Trapping exits since we need to make sure that the `terminate/2' is
     %% called in the case of direct connection (it does not matter for a network
@@ -158,16 +158,20 @@ init({TypeSup, AMQPParams}) ->
     process_flag(trap_exit, true),
     %% connect() has to be called first, so we can use a special state here
     {ok, {TypeSup, AMQPParams}}.
-
+%% 进行链接
 handle_call(connect, _From, {TypeSup, AMQPParams}) ->
+		%% 得到链接类型的模块
     {Type, Mod} = amqp_connection_type_sup:type_module(AMQPParams),
+		%% 初始化模块
     {ok, MState} = Mod:init(),
+		%% 获得启动函数
     SIF = amqp_connection_type_sup:start_infrastructure_fun(
             TypeSup, self(), Type),
     State = #state{module           = Mod,
                    module_state     = MState,
                    amqp_params      = AMQPParams,
                    block_handler    = none},
+		%% 使用模块进行链接
     case Mod:connect(AMQPParams, SIF, TypeSup, MState) of
         {ok, Params} ->
             {reply, {ok, self()}, after_connect(Params, State)};

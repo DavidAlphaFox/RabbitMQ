@@ -152,12 +152,15 @@ start(AmqpParams) ->
     AmqpParams1 =
         case AmqpParams of
             #amqp_params_network{port = undefined, ssl_options = none} ->
+								%% 设置默认的端口
                 AmqpParams#amqp_params_network{port = ?PROTOCOL_PORT};
             #amqp_params_network{port = undefined, ssl_options = _} ->
+								%% 设置默认的SSL端口
                 AmqpParams#amqp_params_network{port = ?PROTOCOL_SSL_PORT};
             _ ->
                 AmqpParams
         end,
+		%% 启动一个链接
     {ok, _Sup, Connection} = amqp_sup:start_connection_sup(AmqpParams1),
     amqp_gen_connection:connect(Connection).
 

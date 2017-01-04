@@ -40,6 +40,7 @@ start_link(AMQPParams) ->
                                             [TypeSup, AMQPParams]},
                                intrinsic, brutal_kill, worker,
                                [amqp_gen_connection]}),
+		%% 返回管理器，返回链接进程
     {ok, Sup, Connection}.
 
 %%---------------------------------------------------------------------------

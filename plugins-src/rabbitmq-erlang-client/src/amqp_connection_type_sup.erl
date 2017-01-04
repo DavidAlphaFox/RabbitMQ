@@ -52,8 +52,11 @@ start_channels_manager(Sup, Conn, ConnName, Type) ->
 
 start_infrastructure_fun(Sup, Conn, network) ->
     fun (Sock, ConnName) ->
+						%% 启动channel的管理器
             {ok, ChMgr} = start_channels_manager(Sup, Conn, ConnName, network),
+						%% 初始化命令的解析器
             {ok, AState} = rabbit_command_assembler:init(?PROTOCOL),
+						%% 写进程
             {ok, Writer} =
                 supervisor2:start_child(
                   Sup,
@@ -61,6 +64,7 @@ start_infrastructure_fun(Sup, Conn, network) ->
                    {rabbit_writer, start_link,
                     [Sock, 0, ?FRAME_MIN_SIZE, ?PROTOCOL, Conn, ConnName]},
                    transient, ?MAX_WAIT, worker, [rabbit_writer]}),
+						%% 读进程
             {ok, _Reader} =
                 supervisor2:start_child(
                   Sup,

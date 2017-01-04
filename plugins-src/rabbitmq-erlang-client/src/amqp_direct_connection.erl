@@ -13,7 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% 使用Erlang的透明是RPC进行链接
 %% @private
 -module(amqp_direct_connection).
 
@@ -130,6 +130,7 @@ connect(Params = #amqp_params_direct{username     = Username,
                          params       = Params,
                          adapter_info = ensure_adapter_info(Info),
                          connected_at = rabbit_misc:now_to_ms(os:timestamp())},
+		%% 直接使用erlang的RPC进行操作
     case rpc:call(Node, rabbit_direct, connect,
                   [{Username, Password}, VHost, ?PROTOCOL, self(),
                    connection_info(State1)]) of
