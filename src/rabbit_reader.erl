@@ -551,13 +551,15 @@ handle_dependent_exit(ChPid, Reason, State) ->
                                                 State1, Channel, Reason),
                                      maybe_close(control_throttle(State2))
     end.
-
+%% 让链接上的Channel逐个关闭
 terminate_channels(#v1{channel_count = 0} = State) ->
     State;
 terminate_channels(#v1{channel_count = ChannelCount} = State) ->
     lists:foreach(fun rabbit_channel:shutdown/1, all_channels()),
     Timeout = 1000 * ?CHANNEL_TERMINATION_TIMEOUT * ChannelCount,
     TimerRef = erlang:send_after(Timeout, self(), cancel_wait),
+		%% 等待一段时间
+		%% 但是实际上是，先尝试取消timer
     wait_for_channel_termination(ChannelCount, TimerRef, State).
 
 wait_for_channel_termination(0, TimerRef, State) ->
@@ -615,11 +617,12 @@ log_hard_error(#v1{connection_state = CS,
         "Error on AMQP connection ~p (~s, vhost: '~s',"
         " user: '~s', state: ~p), channel ~p:~n~p~n",
         [self(), ConnName, VHost, User#user.username, CS, Channel, Reason]).
-%% 进行异常处理
+%% 进行异常处理,处在closed的状态的直接日志并忽视
 handle_exception(State = #v1{connection_state = closed}, Channel, Reason) ->
     log_hard_error(State, Channel, Reason),
     State;
-%% 直接关闭链接
+%% 处在running或者是closing的状态的，需要向Cahnnel0发送异常信息
+%% 之后延迟关闭链接
 handle_exception(State = #v1{connection = #connection{protocol = Protocol},
                              connection_state = CS},
                  Channel, Reason)
@@ -665,11 +668,13 @@ payload_snippet(<<Snippet:16/binary, _/binary>>) ->
     {"first 16", Snippet}.
 
 %%--------------------------------------------------------------------------
-
+%% 创建Channel
 create_channel(_Channel,
                #v1{channel_count = ChannelCount,
                    connection    = #connection{channel_max = ChannelMax}})
   when ChannelMax /= 0 andalso ChannelCount >= ChannelMax ->
+		%% 是否已经达Channel的上限
+		%% 如果已经上限了，那么就要返回异常
     {error, rabbit_misc:amqp_error(
               not_allowed, "number of channels opened (~w) has reached the "
               "negotiated channel_max (~w)",

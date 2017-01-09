@@ -50,19 +50,23 @@ behaviour_info(_Other) ->
 -endif.
 
 %%----------------------------------------------------------------------------
-
+%% Channel的方法拦截器
+%% 基础方法不作任何操作
 intercept_method(#'basic.publish'{} = M, _VHost) -> M;
 intercept_method(#'basic.ack'{}     = M, _VHost) -> M;
 intercept_method(#'basic.nack'{}    = M, _VHost) -> M;
 intercept_method(#'basic.reject'{}  = M, _VHost) -> M;
 intercept_method(#'basic.credit'{}  = M, _VHost) -> M;
 intercept_method(M, VHost) ->
+		%% 剩下的方法，从表中找出所有的拦截模块
     intercept_method(M, VHost, select(rabbit_misc:method_record_type(M))).
 
 intercept_method(M, _VHost, []) ->
     M;
 intercept_method(M, VHost, [I]) ->
+		%% 进行拦截操作
     M2 = I:intercept(M, VHost),
+		%% 验证合法性
     case validate_method(M, M2) of
         true ->
             M2;
@@ -72,6 +76,7 @@ intercept_method(M, VHost, [I]) ->
                                 [I, rabbit_misc:method_record_type(M),
                                  rabbit_misc:method_record_type(M2)])
     end;
+%% 一个方法，不应当超过一个拦截器
 intercept_method(M, _VHost, Is) ->
     internal_error("More than one interceptor for method: ~p -- ~p",
                    [rabbit_misc:method_record_type(M), Is]).

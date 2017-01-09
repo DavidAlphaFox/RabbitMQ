@@ -327,6 +327,7 @@ handle_call(_Request, _From, State) ->
 handle_cast({method, Method, Content, Flow},
             State = #ch{reader_pid   = Reader,
                         virtual_host = VHost}) ->
+		%% 当需要进行流量控制的时候，才会进行ack
     case Flow of
         flow   -> credit_flow:ack(Reader);
         noflow -> ok
@@ -357,6 +358,7 @@ handle_cast(ready_for_close, State = #ch{state      = closing,
     {stop, normal, State};
 
 handle_cast(terminate, State = #ch{writer_pid = WriterPid}) ->
+		%% 让相应的writer进行flush
     ok = rabbit_writer:flush(WriterPid),
     {stop, normal, State};
 
