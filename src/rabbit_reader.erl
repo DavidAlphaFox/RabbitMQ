@@ -389,6 +389,7 @@ handle_other({channel_exit, Channel, Reason}, State) ->
     handle_exception(State, Channel, Reason);
 handle_other({'DOWN', _MRef, process, ChPid, Reason}, State) ->
     handle_dependent_exit(ChPid, Reason, State);
+%% 停止reader
 handle_other(terminate_connection, State) ->
     maybe_emit_stats(State),
     stop;
@@ -448,16 +449,21 @@ terminate(Explanation, State) when ?IS_RUNNING(State) ->
                                 connection_forced, Explanation, [], none))};
 terminate(_Explanation, State) ->
     {force, State}.
-
+%% 进行流量控制状态更新
 control_throttle(State = #v1{connection_state = CS, throttle = Throttle}) ->
+		%% 是否是数据流被block住了
     IsThrottled = ((Throttle#throttle.alarmed_by =/= []) orelse
                credit_flow:blocked()),
     case {CS, IsThrottled} of
+				%% 从running -> blocking
         {running,   true} -> State#v1{connection_state = blocking};
+				%% 从blocking -> running
         {blocking, false} -> State#v1{connection_state = running};
+				%% 从blocked -> running
         {blocked,  false} -> ok = rabbit_heartbeat:resume_monitor(
                                     State#v1.heartbeater),
                              State#v1{connection_state = running};
+				%% 更新流控信息
         {blocked,   true} -> State#v1{throttle = update_last_blocked_by(
                                                    Throttle)};
         {_,            _} -> State
@@ -517,7 +523,7 @@ update_last_blocked_by(Throttle) ->
 
 %%--------------------------------------------------------------------------
 %% error handling / termination
-
+%% 延迟关闭，并不是立刻关闭链接
 close_connection(State = #v1{queue_collector = Collector,
                              connection = #connection{
                                timeout_sec = TimeoutSec}}) ->
@@ -609,10 +615,11 @@ log_hard_error(#v1{connection_state = CS,
         "Error on AMQP connection ~p (~s, vhost: '~s',"
         " user: '~s', state: ~p), channel ~p:~n~p~n",
         [self(), ConnName, VHost, User#user.username, CS, Channel, Reason]).
-
+%% 进行异常处理
 handle_exception(State = #v1{connection_state = closed}, Channel, Reason) ->
     log_hard_error(State, Channel, Reason),
     State;
+%% 直接关闭链接
 handle_exception(State = #v1{connection = #connection{protocol = Protocol},
                              connection_state = CS},
                  Channel, Reason)
@@ -623,6 +630,7 @@ handle_exception(State = #v1{connection = #connection{protocol = Protocol},
     State1 = close_connection(terminate_channels(State)),
     ok = send_on_channel0(State1#v1.sock, CloseMethod, Protocol),
     State1;
+%% 登陆异常了，直接丢出异常信息，结束链接
 handle_exception(State, Channel, Reason) ->
     %% We don't trust the client at this point - force them to wait
     %% for a bit so they can't DOS us with repeated failed logins etc.
@@ -643,7 +651,7 @@ frame_error(Error, Type, Channel, Payload, State) ->
                      rabbit_misc:amqp_error(frame_error,
                                             "type ~p, ~s octets = ~p: ~p",
                                             [Type, Str, Bin, Error], none)).
-
+%% 处理未知的frame，主要是frame存在各种异常
 unexpected_frame(Type, Channel, Payload, State) ->
     {Str, Bin} = payload_snippet(Payload),
     handle_exception(State, Channel,
@@ -701,12 +709,14 @@ channel_cleanup(ChPid, State = #v1{channel_count = ChannelCount}) ->
 all_channels() -> [ChPid || {{ch_pid, ChPid}, _ChannelMRef} <- get()].
 
 %%--------------------------------------------------------------------------
-
+%% 参数为，类型，Channel号和数据
 handle_frame(Type, 0, Payload,
              State = #v1{connection = #connection{protocol = Protocol}})
   when ?IS_STOPPING(State) ->
+		%% 处在关闭状态
     case rabbit_command_assembler:analyze_frame(Type, Payload, Protocol) of
         {method, MethodName, FieldsBin} ->
+						%% Channel0比较特殊，使用handle_method0来完成相应的操作
             handle_method0(MethodName, FieldsBin, State);
         _Other -> State
     end;
@@ -714,7 +724,9 @@ handle_frame(Type, 0, Payload,
              State = #v1{connection = #connection{protocol = Protocol}}) ->
     case rabbit_command_assembler:analyze_frame(Type, Payload, Protocol) of
         error     -> frame_error(unknown_frame, Type, 0, Payload, State);
+				%% 心跳信息，直接返回状态，无任何操作
         heartbeat -> State;
+				%% 操作
         {method, MethodName, FieldsBin} ->
             handle_method0(MethodName, FieldsBin, State);
         _Other    -> unexpected_frame(Type, 0, Payload, State)
@@ -724,6 +736,7 @@ handle_frame(Type, Channel, Payload,
   when ?IS_RUNNING(State) ->
     case rabbit_command_assembler:analyze_frame(Type, Payload, Protocol) of
         error     -> frame_error(unknown_frame, Type, Channel, Payload, State);
+				%% 心跳信息,在非0的Channel上是一个非法的帧
         heartbeat -> unexpected_frame(Type, Channel, Payload, State);
         Frame     -> process_frame(Frame, Channel, State)
     end;
@@ -734,6 +747,7 @@ handle_frame(Type, Channel, Payload, State) ->
 %% 处理帧
 process_frame(Frame, Channel, State) ->
     ChKey = {channel, Channel},
+		%% 从进程信息表中拿出相关的Channel的信息
     case (case get(ChKey) of
               undefined -> create_channel(Channel, State);
               Other     -> {ok, Other, State}
@@ -741,6 +755,7 @@ process_frame(Frame, Channel, State) ->
         {error, Error} ->
             handle_exception(State, Channel, Error);
         {ok, {ChPid, AState}, State1} ->
+						
             case rabbit_command_assembler:process(Frame, AState) of
                 {ok, NewAState} ->
                     put(ChKey, {ChPid, NewAState}),
@@ -749,9 +764,13 @@ process_frame(Frame, Channel, State) ->
                     rabbit_channel:do(ChPid, Method),
                     put(ChKey, {ChPid, NewAState}),
                     post_process_frame(Frame, ChPid, State1);
+								%% 方法，内容和状态
                 {ok, Method, Content, NewAState} ->
+										%% 进行流控,并将数据等发送给指定的Channel的进程
                     rabbit_channel:do_flow(ChPid, Method, Content),
+										%% 更新状态
                     put(ChKey, {ChPid, NewAState}),
+										%% 
                     post_process_frame(Frame, ChPid, control_throttle(State1));
                 {error, Reason} ->
                     handle_exception(State1, Channel, Reason)
@@ -776,7 +795,7 @@ post_process_frame(_Frame, _ChPid, State) ->
 %% We allow clients to exceed the frame size a little bit since quite
 %% a few get it wrong - off-by 1 or 8 (empty frame size) are typical.
 -define(FRAME_SIZE_FUDGE, ?EMPTY_FRAME_SIZE).
-
+%% 帧超长
 handle_input(frame_header, <<Type:8,Channel:16,PayloadSize:32, _/binary>>,
              State = #v1{connection = #connection{frame_max = FrameMax}})
   when FrameMax /= 0 andalso
@@ -784,6 +803,7 @@ handle_input(frame_header, <<Type:8,Channel:16,PayloadSize:32, _/binary>>,
     fatal_frame_error(
       {frame_too_large, PayloadSize, FrameMax - ?EMPTY_FRAME_SIZE},
       Type, Channel, <<>>, State);
+%% 正常帧，进行处理
 handle_input(frame_header, <<Type:8,Channel:16,PayloadSize:32,
                              Payload:PayloadSize/binary, ?FRAME_END,
                              Rest/binary>>,

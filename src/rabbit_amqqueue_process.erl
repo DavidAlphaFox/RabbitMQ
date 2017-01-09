@@ -318,7 +318,7 @@ bq_init(BQ, Q, Recover) ->
             fun (Mod, Fun) ->
                     rabbit_amqqueue:run_backing_queue(Self, Mod, Fun)
             end).
-
+%% 处理队列的属性参数
 process_args_policy(State = #q{q                   = Q,
                                args_policy_version = N}) ->
       ArgsTable =

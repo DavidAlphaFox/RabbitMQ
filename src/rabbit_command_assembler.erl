@@ -82,7 +82,9 @@ init(Protocol) -> {ok, {method, Protocol}}.
 
 process({method, MethodName, FieldsBin}, {method, Protocol}) ->
     try
+				%% 通过协议版本和方法名，获取当前的方法函数
         Method = Protocol:decode_method_fields(MethodName, FieldsBin),
+				%% 方法是否存在内容
         case Protocol:method_has_content(MethodName) of
             true  -> {ClassId, _MethodId} = Protocol:method_id(MethodName),
                      {ok, {content_header, Method, ClassId, Protocol}};
@@ -90,6 +92,7 @@ process({method, MethodName, FieldsBin}, {method, Protocol}) ->
         end
     catch exit:#amqp_error{} = Reason -> {error, Reason}
     end;
+%% 不能匹配的方法帧
 process(_Frame, {method, _Protocol}) ->
     unexpected_frame("expected method frame, "
                      "got non method frame instead", [], none);
