@@ -397,8 +397,12 @@ not_found_or_absent_dirty(Name) ->
 
 with(Name, F, E) ->
     case lookup(Name) of
+				%% 查找相应队列
+				%% 如果是崩溃了
         {ok, Q = #amqqueue{state = crashed}} ->
+						%% 那么就报告崩溃
             E({absent, Q, crashed});
+				%% 如果是正常运行的状态
         {ok, Q = #amqqueue{pid = QPid}} ->
             %% We check is_process_alive(QPid) in case we receive a
             %% nodedown (for example) in F() that has nothing to do
@@ -407,10 +411,15 @@ with(Name, F, E) ->
             %% indicates a code bug and we don't want to get stuck in
             %% the retry loop.
             rabbit_misc:with_exit_handler(
-              fun () -> false = rabbit_mnesia:is_process_alive(QPid),
-                        timer:sleep(25),
-                        with(Name, F, E)
+              fun () -> 
+											%% 检查是否存活
+											false = rabbit_mnesia:is_process_alive(QPid),
+											%% 休眠25秒
+											timer:sleep(25),
+											%% 重新执行相关检查
+											with(Name, F, E)
               end, fun () -> F(Q) end);
+				%% 队列不存在
         {error, not_found} ->
             E(not_found_or_absent_dirty(Name))
     end.
@@ -445,7 +454,9 @@ check_exclusive_access(#amqqueue{name = QueueName}, _ReaderPid, _MatchType) ->
 
 with_exclusive_access_or_die(Name, ReaderPid, F) ->
     with_or_die(Name,
-                fun (Q) -> check_exclusive_access(Q, ReaderPid), F(Q) end).
+                fun (Q) -> 
+												check_exclusive_access(Q, ReaderPid), F(Q) 
+								end).
 
 assert_args_equivalence(#amqqueue{name = QueueName, arguments = Args},
                         RequiredArgs) ->

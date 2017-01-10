@@ -292,7 +292,7 @@ protocol_error(#amqp_error{} = Error) ->
     exit(Error).
 
 not_found(R) -> protocol_error(not_found, "no ~s", [rs(R)]).
-
+%% 当队列缺失的时候
 absent(#amqqueue{name = QueueName, pid = QPid, durable = true}, nodedown) ->
     %% The assertion of durability is mainly there because we mention
     %% durability in the error message. That way we will hopefully
@@ -480,6 +480,7 @@ with_exit_handler(Handler, Thunk) ->
     try
         Thunk()
     catch
+				%% 异常情况下，几个特殊的条件执行Handler
         exit:{R, _}      when ?IS_BENIGN_EXIT(R) -> Handler();
         exit:{{R, _}, _} when ?IS_BENIGN_EXIT(R) -> Handler()
     end.

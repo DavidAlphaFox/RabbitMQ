@@ -361,7 +361,7 @@ handle_cast(terminate, State = #ch{writer_pid = WriterPid}) ->
 		%% 让相应的writer进行flush
     ok = rabbit_writer:flush(WriterPid),
     {stop, normal, State};
-
+%% 订阅成功
 handle_cast({command, #'basic.consume_ok'{consumer_tag = CTag} = Msg}, State) ->
     ok = send(Msg, State),
     noreply(consumer_monitor(CTag, State));
@@ -379,6 +379,8 @@ handle_cast({deliver, ConsumerTag, AckRequired,
                                    content       = Content}}},
             State = #ch{writer_pid = WriterPid,
                         next_tag   = DeliveryTag}) ->
+		%% 向写出进程写出数据
+		%% 讲basic_message重新封装成basic.deliver
     ok = rabbit_writer:send_command_and_notify(
            WriterPid, QPid, self(),
            #'basic.deliver'{consumer_tag = ConsumerTag,
@@ -793,16 +795,22 @@ handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
     ExchangeName = rabbit_misc:r(VHostPath, exchange, ExchangeNameBin),
 		%% 检查写权限
     check_write_permitted(ExchangeName, State),
+		%% 找到exchange
     Exchange = rabbit_exchange:lookup_or_die(ExchangeName),
+		%% 检查exchange是否存活
     check_internal_exchange(Exchange),
     %% We decode the content's properties here because we're almost
     %% certain to want to look at delivery-mode and priority.
     DecodedContent = #content {properties = Props} =
         maybe_set_fast_reply_to(
           rabbit_binary_parser:ensure_content_decoded(Content), State),
+		%% 检查用户ID
     check_user_id_header(Props, State),
+		%% 检查超时
     check_expiration_header(Props),
+		%% 需要进行确认消息
     DoConfirm = Tx =/= none orelse ConfirmEnabled,
+		%% 获得消息号和状态更新
     {MsgSeqNo, State1} =
         case DoConfirm orelse Mandatory of
             false -> {undefined, State};
@@ -823,6 +831,8 @@ handle_method(#'basic.publish'{exchange    = ExchangeNameBin,
             QNames = rabbit_exchange:route(Exchange, Delivery),
             DQ = {Delivery, QNames},
             {noreply, case Tx of
+													%% 如果不是事务，直接向消息队列推送
+													%% 如果是事务，那么就需要讲消息进行缓存
                           none         -> deliver_to_queues(DQ, State1);
                           {Msgs, Acks} -> Msgs1 = queue:in(DQ, Msgs),
                                           State1#ch{tx = {Msgs1, Acks}}
@@ -928,7 +938,7 @@ handle_method(#'basic.cancel'{consumer_tag = ConsumerTag, nowait = NoWait},
         false -> Rep = #'basic.cancel_ok'{consumer_tag = ConsumerTag},
                  {reply, Rep, State1}
     end;
-
+%% 消费者监听队列
 handle_method(#'basic.consume'{queue        = QueueNameBin,
                                consumer_tag = ConsumerTag,
                                no_local     = _, % FIXME: implement
@@ -938,9 +948,12 @@ handle_method(#'basic.consume'{queue        = QueueNameBin,
                                arguments    = Args},
               _, State = #ch{consumer_prefetch = ConsumerPrefetch,
                              consumer_mapping  = ConsumerMapping}) ->
+		%% 是否能找到ConsumerTag
     case dict:find(ConsumerTag, ConsumerMapping) of
         error ->
+						%% 得到QueueName
             QueueName = qbin_to_resource(QueueNameBin, State),
+						%% 检查读权限
             check_read_permitted(QueueName, State),
 						%% 如果客户端没指定tag的时候
 						%% 服务端会指定一个tag
@@ -954,14 +967,17 @@ handle_method(#'basic.consume'{queue        = QueueNameBin,
                    QueueName, NoAck, ConsumerPrefetch, ActualConsumerTag,
                    ExclusiveConsume, Args, NoWait, State) of
                 {ok, State1} ->
+										%% 订阅成功了
                     {noreply, State1};
                 {error, exclusive_consume_unavailable} ->
+										%% 订阅失败了
                     rabbit_misc:protocol_error(
                       access_refused, "~s in exclusive use",
                       [rabbit_misc:rs(QueueName)])
             end;
         {ok, _} ->
             %% Attempted reuse of consumer tag.
+						%% 如果是重复的cosumer tag那么就报错
             rabbit_misc:protocol_error(
               not_allowed, "attempt to reuse consumer tag '~s'", [ConsumerTag])
     end;
@@ -1376,6 +1392,7 @@ basic_consume(QueueName, NoAck, ConsumerPrefetch, ActualConsumerTag,
     case rabbit_amqqueue:with_exclusive_access_or_die(
            QueueName, ConnPid,
            fun (Q) ->
+									 %% 符合规则之后，对queue进行消费
                    {rabbit_amqqueue:basic_consume(
                       Q, NoAck, self(),
                       rabbit_limiter:pid(Limiter),
