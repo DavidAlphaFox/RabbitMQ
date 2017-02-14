@@ -593,14 +593,20 @@ run_step(StepName, Attributes, AttributeName) ->
     end.
 
 vertices({AppName, _Module, Steps}) ->
+		%% 点生成函数
+		%% 点的名字是stepName
+		%% 点的标签是AppName，StepName和属性
     [{StepName, {AppName, StepName, Atts}} || {StepName, Atts} <- Steps].
 
 edges({_AppName, _Module, Steps}) ->
+		%% 边构建函数
     EnsureList = fun (L) when is_list(L) -> L;
                      (T)                 -> [T]
                  end,
     [case Key of
+				 %% requires 生成自己指向别的APP的边
          requires -> {StepName, OtherStep};
+				 %% enables 生成别APP指向自己的边
          enables  -> {OtherStep, StepName}
      end || {StepName, Atts} <- Steps,
             {Key, OtherStepOrSteps} <- Atts,
