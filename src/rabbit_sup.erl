@@ -80,6 +80,7 @@ start_delayed_restartable_child(M)    -> start_restartable_child(M, [], true).
 start_delayed_restartable_child(M, A) -> start_restartable_child(M, A,  true).
 
 start_restartable_child(Mod, Args, Delay) ->
+		%% 先构建一个supervisor的名字
     Name = list_to_atom(atom_to_list(Mod) ++ "_sup"),
     child_reply(supervisor:start_child(
                   ?SERVER,

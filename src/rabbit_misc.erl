@@ -509,24 +509,34 @@ with_user(Username, Thunk) ->
 
 with_user_and_vhost(Username, VHostPath, Thunk) ->
     with_user(Username, rabbit_vhost:with(VHostPath, Thunk)).
-
+%% 执行mnesia的事务
 execute_mnesia_transaction(TxFun) ->
     %% Making this a sync_transaction allows us to use dirty_read
     %% elsewhere and get a consistent result even when that read
     %% executes on a different node.
+		%% 向工作池子提交任务
     case worker_pool:submit(
            fun () ->
+									 %% 检查mnesia是否处在事务当中
                    case mnesia:is_transaction() of
-                       false -> DiskLogBefore = mnesia_dumper:get_log_writes(),
-                                Res = mnesia:sync_transaction(TxFun),
-                                DiskLogAfter  = mnesia_dumper:get_log_writes(),
-                                case DiskLogAfter == DiskLogBefore of
-                                    true  -> Res;
-                                    false -> {sync, Res}
-                                end;
+                       false -> 
+													 %% 非事务状态下，先获取mnesia_dumper的写入信息
+													 DiskLogBefore = mnesia_dumper:get_log_writes(),
+													 %% 同步执行mnesia事务函数
+													 Res = mnesia:sync_transaction(TxFun),
+													 %% 事务结束了，再次获取mnesia_dumper的写入信息
+													 DiskLogAfter  = mnesia_dumper:get_log_writes(),
+													 %% 
+													 case DiskLogAfter == DiskLogBefore of
+															 %% 比较信息差别
+															 true  -> Res;
+															 %% 不相等的时候，说明需要同步，此处需要看mnesia事务处理方式
+															 false -> {sync, Res}
+													 end;
                        true  -> mnesia:sync_transaction(TxFun)
                    end
            end, single) of
+				%% 出现sync的操作了，那么就执行mnesia_sync:sync
         {sync, {atomic,  Result}} -> mnesia_sync:sync(), Result;
         {sync, {aborted, Reason}} -> throw({error, Reason});
         {atomic,  Result}         -> Result;

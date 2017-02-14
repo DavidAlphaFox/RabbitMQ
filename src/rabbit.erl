@@ -932,6 +932,7 @@ config_setting() ->
 %% We don't want this in fhc since it references rabbit stuff. And we can't put
 %% this in the bootstep directly.
 start_fhc() ->
+		%% 使用rabbit_sup 创建可重起的子进程
     rabbit_sup:start_restartable_child(
       file_handle_cache,
       [fun rabbit_alarm:set_alarm/1, fun rabbit_alarm:clear_alarm/1]).

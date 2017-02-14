@@ -113,7 +113,7 @@ build_content_frames(SizeAcc, FramesAcc, FragSizeRem, FragAcc,
 
 build_heartbeat_frame() ->
     create_frame(?FRAME_HEARTBEAT, 0, <<>>).
-
+%% Frame类型，Channle号和数据负载
 create_frame(TypeInt, ChannelInt, Payload) ->
 		%% 类型，channel号
 		%% 内容长度，内容，frame的结尾
@@ -174,6 +174,8 @@ string_length(String)                        -> length(String).
 
 check_empty_frame_size() ->
     %% Intended to ensure that EMPTY_FRAME_SIZE is defined correctly.
+		%% 用来检查iolist_size是否是兼容的
+		%% 如果不兼容，那么直接就可以终止启动了
     case iolist_size(create_frame(?FRAME_BODY, 0, <<>>)) of
         ?EMPTY_FRAME_SIZE -> ok;
         ComputedSize      -> exit({incorrect_empty_frame_size,

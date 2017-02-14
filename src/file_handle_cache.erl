@@ -169,6 +169,7 @@
          handle_info/2, terminate/2, code_change/3, prioritise_cast/3]).
 
 -define(SERVER, ?MODULE).
+%% 默认会保留100个句柄，供内部使用
 -define(RESERVED_FOR_OTHERS, 100).
 
 -define(FILE_HANDLES_LIMIT_OTHER, 1024).
@@ -885,19 +886,24 @@ used(#fhc_state{open_count          = C1,
 %%----------------------------------------------------------------------------
 
 init([AlarmSet, AlarmClear]) ->
+		%% 获取文件句柄最大打开的限制
     Limit = case application:get_env(file_handles_high_watermark) of
                 {ok, Watermark} when (is_integer(Watermark) andalso
                                       Watermark > 0) ->
                     Watermark;
                 _ ->
+										%% 如果程序没限制，那么直接通过ulimit进行获取
                     case ulimit() of
                         unknown  -> ?FILE_HANDLES_LIMIT_OTHER;
                         Lim      -> lists:max([2, Lim - ?RESERVED_FOR_OTHERS])
                     end
             end,
+		%% 对limit进行归一化，防止出现不符合要求的值
     ObtainLimit = obtain_limit(Limit),
     error_logger:info_msg("Limiting to approx ~p file handles (~p sockets)~n",
                           [Limit, ObtainLimit]),
+		%% 创建内存表
+		%% 用来保存客户端状态（进程，回掉函数等）和文件句柄的LRU
     Clients = ets:new(?CLIENT_ETS_TABLE, [set, private, {keypos, #cstate.pid}]),
     Elders = ets:new(?ELDERS_ETS_TABLE, [set, private]),
     {ok, #fhc_state { elders                = Elders,

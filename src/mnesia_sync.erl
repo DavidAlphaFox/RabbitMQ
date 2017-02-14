@@ -51,20 +51,25 @@ sync() ->
 %%----------------------------------------------------------------------------
 
 init([]) ->
+		%% 启动后获得Mnesia所有的磁盘结点
     {ok, #state{disc_node = mnesia:system_info(use_dir), waiting = []}}.
 
 handle_call(sync, _From, #state{disc_node = false} = State) ->
     {reply, ok, State};
+%% 将需要同步的请求放入waiting队列中
 handle_call(sync, From, #state{waiting = Waiting} = State) ->
+		%% 在没其它消息打断的情况下，其实就是立刻执行
     {noreply, State#state{waiting = [From | Waiting]}, 0};
 handle_call(Request, _From, State) ->
     {stop, {unhandled_call, Request}, State}.
 
 handle_cast(Request, State) ->
     {stop, {unhandled_cast, Request}, State}.
-
+%% 收到超时的消息
 handle_info(timeout, #state{waiting = Waiting} = State) ->
+		%% 对disk_log进行同步
     ok = disk_log:sync(latest_log),
+		%% 回复队列中所有等待的客户端
     [gen_server:reply(From, ok) || From <- Waiting],
     {noreply, State#state{waiting = []}};
 handle_info(Message, State) ->

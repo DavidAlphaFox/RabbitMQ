@@ -110,6 +110,8 @@
 %%  - 1 byte of payload trailer FRAME_END byte
 %% See rabbit_binary_generator:check_empty_frame_size/0, an assertion
 %% called at startup.
+%% 默认空Frame的大小
+%% 从这里面我们可以看出来，Channel最大可以到65536
 -define(EMPTY_FRAME_SIZE, 8).
 
 -define(MAX_WAIT, 16#ffffffff).

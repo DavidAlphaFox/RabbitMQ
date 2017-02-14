@@ -38,8 +38,9 @@
 %%----------------------------------------------------------------------------
 
 start_link(Name, {_M, _F, _A} = Fun, Delay) ->
+		%% supervisor2支持延迟启动
     supervisor2:start_link({local, Name}, ?MODULE, [Fun, Delay]).
-
+%% 按照one_for_one进行重起
 init([{Mod, _F, _A} = Fun, Delay]) ->
     {ok, {{one_for_one, 10, 10},
           [{Mod, Fun, case Delay of
