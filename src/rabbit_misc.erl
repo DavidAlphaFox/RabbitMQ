@@ -788,6 +788,7 @@ now_ms() ->
     timer:now_diff(now(), {0,0,0}) div 1000.
 
 module_attributes(Module) ->
+		%% 使用module_info函数获得module的attribue
     case catch Module:module_info(attributes) of
         {'EXIT', {undef, [{Module, module_info, _} | _]}} ->
             io:format("WARNING: module ~p not found, so not scanned for boot steps.~n",
@@ -798,19 +799,24 @@ module_attributes(Module) ->
         V ->
             V
     end.
-
+%% 获取所有加载了的modules的特定的attributes
 all_module_attributes(Name) ->
+		%% 进行排序后的结构
     Targets =
         lists:usort(
           lists:append(
             [[{App, Module} || Module <- Modules] ||
+								%% 获得所有的加载的application
                 {App, _, _}   <- application:loaded_applications(),
+								%% 获得所有加载的application下的modules
                 {ok, Modules} <- [application:get_key(App, modules)]])),
     lists:foldl(
       fun ({App, Module}, Acc) ->
+							%% 找到所有符合期望的名字的属性
               case lists:append([Atts || {N, Atts} <- module_attributes(Module),
                                          N =:= Name]) of
                   []   -> Acc;
+									%% 保存为App名，模块名，和属性值
                   Atts -> [{App, Module, Atts} | Acc]
               end
       end, [], Targets).

@@ -13,7 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% 启动模块，RabbitMQ从这个地方启动
 -module(rabbit).
 
 -behaviour(application).
@@ -258,6 +258,7 @@ warn_if_hipe_compilation_failed(false) ->
 %% HiPE compilation happens before we have log handlers and can take a
 %% long time, so make an exception to our no-stdout policy and display
 %% progress via stdout.
+%% 使用HiPE进行编译
 hipe_compile() ->
     {ok, HipeModulesAll} = application:get_env(rabbit, hipe_modules),
     HipeModules = [HM || HM <- HipeModulesAll, code:which(HM) =/= non_existing],
@@ -297,10 +298,16 @@ start() ->
     start_it(fun() ->
                      %% We do not want to HiPE compile or upgrade
                      %% mnesia after just restarting the app
+										 %% 确保rabbit这个application被加载
                      ok = ensure_application_loaded(),
+										 %% 确保日志被正确打开
                      ok = ensure_working_log_handlers(),
+										 %% 准备集群的状态文件
+										 %% 准备集群所有执行中结点的文件
                      rabbit_node_monitor:prepare_cluster_status_files(),
+										 %% 检查mnesia集群的一致性
                      rabbit_mnesia:check_cluster_consistency(),
+										 %% 启动broker
                      broker_start()
              end).
 
@@ -320,17 +327,25 @@ boot() ->
              end).
 
 broker_start() ->
+		%% 加载所有的插件
     Plugins = rabbit_plugins:setup(),
     ToBeLoaded = Plugins ++ ?APPS,
+		%% 启动包括插件在内的所有的应用
     start_apps(ToBeLoaded),
+		%% 进行日志
     ok = log_broker_started(rabbit_plugins:active()).
 
 start_it(StartFun) ->
+		%% 建立哨位进程，如果收到stop信息就立刻结束
     Marker = spawn_link(fun() -> receive stop -> ok end end),
+		%% 将哨位进程注册为rabbit_boot命名进程
     case catch register(rabbit_boot, Marker) of
+				%% 注册成功了
         true -> try
+										%% 当前结点上的rabbit进程还在执行
                     case is_running() of
                         true  -> ok;
+												%% 没在执行，那么就需要执行启动函数
                         false -> StartFun()
                     end
                 catch
@@ -339,6 +354,8 @@ start_it(StartFun) ->
                     _:Reason ->
                         boot_error(Reason, erlang:get_stacktrace())
                 after
+										%% 当启动不管成功失败
+										%% 最后都要让哨位进程rabbit_boot退出
                     unlink(Marker),
                     Marker ! stop,
                     %% give the error loggers some time to catch up
@@ -350,11 +367,15 @@ start_it(StartFun) ->
 
 stop() ->
     case whereis(rabbit_boot) of
+				%% 不存在了，可以直接进入退出过程
         undefined -> ok;
+				%% 进程存在了
         _         -> await_startup(true)
     end,
     rabbit_log:info("Stopping RabbitMQ~n", []),
+		%% 得到包括插件再内，所有活跃的应用
     Apps = ?APPS ++ rabbit_plugins:active(),
+		%% 按照依赖关系，逐步的停止掉所有的活跃应用
     stop_apps(app_utils:app_dependency_order(Apps, true)),
     rabbit_log:info("Stopped RabbitMQ application~n", []).
 
@@ -403,12 +424,17 @@ await_startup() ->
 await_startup(HaveSeenRabbitBoot) ->
     %% We don't take absence of rabbit_boot as evidence we've started,
     %% since there's a small window before it is registered.
+		%% rabbit_boot进程，并非一开始就使用命名启动的，而是先启动进程再注册名字
+		%% 因为并发的关系，我们需要再次确认rabbit_boot进程
     case whereis(rabbit_boot) of
+				%% 进程不存在了，但是之前看到了rabbit_boot进程或现在正在执行
         undefined -> case HaveSeenRabbitBoot orelse is_running() of
                          true  -> ok;
                          false -> timer:sleep(100),
                                   await_startup(false)
                      end;
+				%% 进程存在，继续运行
+				%% 值打rabbit_boot退出了，才能退出该函数
         _         -> timer:sleep(100),
                      await_startup(true)
     end.
@@ -526,7 +552,9 @@ run_boot_steps(Apps) ->
     ok.
 
 find_steps(Apps) ->
+		%% 使用rabbit_misc获得所有模块启动的所有步骤
     All = sort_boot_steps(rabbit_misc:all_module_attributes(rabbit_boot_step)),
+		%% 找到所有属于Apps的App中的step
     [Step || {App, _, _} = Step <- All, lists:member(App, Apps)].
 
 run_step(StepName, Attributes, AttributeName) ->

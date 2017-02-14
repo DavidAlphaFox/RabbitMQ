@@ -418,7 +418,8 @@ cluster_status(WhichNodes) ->
         ram     -> AllNodes -- DiscNodes;
         running -> RunningNodes
     end.
-
+%% 获得otp的版本,rabbit的版本
+%% 以及mnesia的集群状态
 node_info() ->
     {rabbit_misc:otp_release(), rabbit_misc:version(),
      cluster_status_from_mnesia()}.
@@ -602,18 +603,22 @@ check_cluster_consistency() ->
     end.
 
 check_cluster_consistency(Node) ->
+		%% 尝试通过rpc调用远程的rabbit_mnesia模块来获取结点信息
     case rpc:call(Node, rabbit_mnesia, node_info, []) of
         {badrpc, _Reason} ->
             {error, not_found};
         {_OTP, _Rabbit, {error, _}} ->
             {error, not_found};
         {OTP, Rabbit, {ok, Status}} ->
+						%% 远程调用成功后
+						%% 检查OTP，rabbit的版本和状态
             case check_consistency(OTP, Rabbit, Node, Status) of
                 {error, _} = E -> E;
                 {ok, Res}      -> {ok, Res}
             end;
         {_OTP, Rabbit, _Hash, _Status} ->
             %% delegate hash checking implies version mismatch
+						%% 版本不匹配
             version_error("Rabbit", rabbit_misc:version(), Rabbit)
     end.
 
@@ -781,10 +786,13 @@ check_consistency(OTP, Rabbit, Node, Status) ->
        check_nodes_consistency(Node, Status)]).
 
 check_nodes_consistency(Node, RemoteStatus = {RemoteAllNodes, _, _}) ->
+		%% 自己是否在对方返回的结点列表中
     case me_in_nodes(RemoteAllNodes) of
         true ->
+						%% 存在，那么就没问题
             {ok, RemoteStatus};
         false ->
+						%% 不存在，说明出现了不一致的状况
             {error, {inconsistent_cluster,
                      rabbit_misc:format("Node ~p thinks it's clustered "
                                         "with node ~p, but ~p disagrees",

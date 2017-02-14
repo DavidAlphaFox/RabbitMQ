@@ -102,9 +102,12 @@ cluster_status_filename() ->
     rabbit_mnesia:dir() ++ "/cluster_nodes.config".
 %% 准备Cluster的状态文件
 prepare_cluster_status_files() ->
+		%% 确保mnesia的文件夹存在
     rabbit_mnesia:ensure_mnesia_dir(),
     Corrupt = fun(F) -> throw({error, corrupt_cluster_status_files, F}) end,
+		%% 尝试读取存活结点文件
     RunningNodes1 = case try_read_file(running_nodes_filename()) of
+												%% 得到所有的结点
                         {ok, [Nodes]} when is_list(Nodes) -> Nodes;
                         {ok, Other}                       -> Corrupt(Other);
                         {error, enoent}                   -> []
@@ -113,6 +116,7 @@ prepare_cluster_status_files() ->
     %% The running nodes file might contain a set or a list, in case
     %% of the legacy file
     RunningNodes2 = lists:usort(ThisNode ++ RunningNodes1),
+		%% 得到所有的结点和磁盘级别的结点
     {AllNodes1, DiscNodes} =
         case try_read_file(cluster_status_filename()) of
             {ok, [{AllNodes, DiscNodes0}]} ->
@@ -126,6 +130,7 @@ prepare_cluster_status_files() ->
                 {LegacyNodes, LegacyNodes}
         end,
     AllNodes2 = lists:usort(AllNodes1 ++ RunningNodes2),
+		%% 重新写入集群状态文件
     ok = write_cluster_status({AllNodes2, DiscNodes, RunningNodes2}).
 %% 写入Cluster的状态文件
 write_cluster_status({All, Disc, Running}) ->
