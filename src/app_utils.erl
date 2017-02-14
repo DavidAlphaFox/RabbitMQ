@@ -75,9 +75,11 @@ stop_applications(Apps, ErrorHandler) ->
                         Apps).
 
 app_dependency_order(RootApps, StripUnreachable) ->
+		%% 构建有向图
     {ok, G} = rabbit_misc:build_acyclic_graph(
                 fun ({App, _Deps}) -> [{App, App}] end,
                 fun ({App,  Deps}) -> [{Dep, App} || Dep <- Deps] end,
+								
                 [{App, app_dependencies(App)} ||
                     {App, _Desc, _Vsn} <- application:loaded_applications()]),
     try
@@ -86,6 +88,7 @@ app_dependency_order(RootApps, StripUnreachable) ->
                      digraph_utils:reachable(RootApps, G));
             false -> ok
         end,
+				%% 生成排序
         digraph_utils:topsort(G)
     after
         true = digraph:delete(G)
@@ -114,12 +117,14 @@ load_applications(Worklist, Loaded) ->
     end.
 
 app_dependencies(App) ->
+		%% 获取App中定义的，依赖的App
     case application:get_key(App, applications) of
         undefined -> [];
         {ok, Lst} -> Lst
     end.
 
 manage_applications(Iterate, Do, Undo, SkipError, ErrorHandler, Apps) ->
+		%% 遍历所有App
     Iterate(fun (App, Acc) ->
                     case Do(App) of
                         ok -> [App | Acc];

@@ -822,17 +822,21 @@ all_module_attributes(Name) ->
       end, [], Targets).
 
 build_acyclic_graph(VertexFun, EdgeFun, Graph) ->
+		%% 使用digrah创建一个新的数据结构
     G = digraph:new([acyclic]),
     try
+				%% 构建点信息
         [case digraph:vertex(G, Vertex) of
              false -> digraph:add_vertex(G, Vertex, Label);
              _     -> ok = throw({graph_error, {vertex, duplicate, Vertex}})
          end || GraphElem       <- Graph,
                 {Vertex, Label} <- VertexFun(GraphElem)],
+				%% 构建边信息
         [case digraph:add_edge(G, From, To) of
              {error, E} -> throw({graph_error, {edge, E, From, To}});
              _          -> ok
          end || GraphElem  <- Graph,
+								%% 构建From和To的信息
                 {From, To} <- EdgeFun(GraphElem)],
         {ok, G}
     catch {graph_error, Reason} ->

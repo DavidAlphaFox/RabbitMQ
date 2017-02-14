@@ -179,7 +179,7 @@
 
 -include("rabbit_framing.hrl").
 -include("rabbit.hrl").
-
+%% 默认要启动的应用
 -define(APPS, [os_mon, mnesia, rabbit]).
 
 %% HiPE compilation uses multiple cores anyway, but some bits are
@@ -389,10 +389,15 @@ stop_and_halt() ->
     ok.
 
 start_apps(Apps) ->
+		%% 确保所有应用加载
     app_utils:load_applications(Apps),
+		%% 计算启动依赖顺序
+		%% 有向图依赖算法
     OrderedApps = app_utils:app_dependency_order(Apps, false),
     case lists:member(rabbit, Apps) of
+				%% 不在其中，那么就是纯插件启动
         false -> run_boot_steps(Apps); %% plugin activation
+				%% 如果是rabbit在这些应用中,说明是首次启动
         true  -> ok                    %% will run during start of rabbit app
     end,
     ok = app_utils:start_applications(OrderedApps,
@@ -515,18 +520,25 @@ rotate_logs(BinarySuffix) ->
                                     rabbit_sasl_report_file_h)).
 
 %%--------------------------------------------------------------------
-
+%% erlang的App的启动函数
 start(normal, []) ->
+		%% 检查erlang的版本
     case erts_version_check() of
         ok ->
+						%% 打印相关性信
             rabbit_log:info("Starting RabbitMQ ~s on Erlang ~s~n~s~n~s~n",
                             [rabbit_misc:version(), rabbit_misc:otp_release(),
                              ?COPYRIGHT_MESSAGE, ?INFORMATION_MESSAGE]),
+						%% 启动进程树
+						%% 其实是一个空树，实际的启动是通过run_boot_steps来完成的
             {ok, SupPid} = rabbit_sup:start_link(),
+						%% 将进程树的第一个进程注册为rabbit
             true = register(rabbit, self()),
+						%% 打印banner
             print_banner(),
             log_banner(),
             warn_if_kernel_config_dubious(),
+						%% 进行依赖性启动
             run_boot_steps(),
             {ok, SupPid};
         Error ->
@@ -548,6 +560,7 @@ run_boot_steps() ->
     run_boot_steps([App || {App, _, _} <- application:loaded_applications()]).
 
 run_boot_steps(Apps) ->
+		%% 查找指定的Apps的启动顺序
     [ok = run_step(Step, Attrs, mfa) || {_, Step, Attrs} <- find_steps(Apps)],
     ok.
 
@@ -558,12 +571,15 @@ find_steps(Apps) ->
     [Step || {App, _, _} = Step <- All, lists:member(App, Apps)].
 
 run_step(StepName, Attributes, AttributeName) ->
+		%% 找到属性中的mfa
     case [MFA || {Key, MFA} <- Attributes,
                  Key =:= AttributeName] of
         [] ->
             ok;
+				%% mfa存在
         MFAs ->
             [try
+								 %% 尝试按顺序执行
                  apply(M,F,A)
              of
                  ok              -> ok;
@@ -592,6 +608,8 @@ edges({_AppName, _Module, Steps}) ->
             Key =:= requires orelse Key =:= enables].
 
 sort_boot_steps(UnsortedSteps) ->
+		%% 对于boot_step_attributes同样使用了图算法
+		%% 进行依赖遍历，生成启动顺序
     case rabbit_misc:build_acyclic_graph(fun vertices/1, fun edges/1,
                                          UnsortedSteps) of
         {ok, G} ->
