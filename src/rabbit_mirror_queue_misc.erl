@@ -13,7 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2010-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% Rabbit用来处理镜像队列的
 -module(rabbit_mirror_queue_misc).
 -behaviour(rabbit_policy_validator).
 
@@ -127,6 +127,9 @@ remove_from_queue(QueueName, Self, DeadGMPids) ->
 %% old master might otherwise never get removed, which in turn might
 %% prevent promotion of another slave (e.g. us).
 %%
+%% 仍然进行mnesia的更新，防止在成为master之前就挂掉了
+%% 如果在发生这种情况，旧的已经死掉的master是无法正确移除的
+%% 导致的结果就是令一个slave无法提升为master
 %% Note however that we do not update the master pid. Otherwise we can
 %% have the situation where a slave updates the mnesia record for a
 %% queue, promoting another slave before that slave realises it has
@@ -146,6 +149,7 @@ remove_from_queue(QueueName, Self, DeadGMPids) ->
 %% not be present in gm_pids, but only if said master has died.
 
 on_node_up() ->
+		%% 得到QNames
     QNames =
         rabbit_misc:execute_mnesia_transaction(
           fun () ->
@@ -171,6 +175,7 @@ on_node_up() ->
                             end
                     end, [], rabbit_queue)
           end),
+		%% 为队列添加镜像
     [add_mirror(QName, node(), async) || QName <- QNames],
     ok.
 
@@ -268,6 +273,7 @@ suggested_queue_nodes(Q, All) -> suggested_queue_nodes(Q, node(), All).
 %% rabbit_mnesia:cluster_nodes(running) out of a loop or transaction
 %% or both.
 suggested_queue_nodes(Q = #amqqueue{exclusive_owner = Owner}, DefNode, All) ->
+		%% Master进程，本节点上的进程
     {MNode0, SNodes, SSNodes} = actual_queue_nodes(Q),
     MNode = case MNode0 of
                 none -> DefNode;
@@ -282,7 +288,7 @@ suggested_queue_nodes(Q = #amqqueue{exclusive_owner = Owner}, DefNode, All) ->
                 end;
         _    -> {MNode, []}
     end.
-
+%% 所有的正在运行的节点
 all_nodes() -> rabbit_mnesia:cluster_nodes(running).
 
 policy(Policy, Q) ->
@@ -315,7 +321,9 @@ is_mirrored(Q) ->
 actual_queue_nodes(#amqqueue{pid             = MPid,
                              slave_pids      = SPids,
                              sync_slave_pids = SSPids}) ->
+		%% 找到本节点上所有的进程
     Nodes = fun (L) -> [node(Pid) || Pid <- L] end,
+		%% {Master,本节点上Slave，本节点上同步的Slave}
     {case MPid of
          none -> none;
          _    -> node(MPid)

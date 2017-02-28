@@ -13,7 +13,7 @@
 %% The Initial Developer of the Original Code is GoPivotal, Inc.
 %% Copyright (c) 2007-2014 GoPivotal, Inc.  All rights reserved.
 %%
-
+%% RabbitMQ注册模块
 -module(rabbit_registry).
 
 -behaviour(gen_server).
@@ -138,6 +138,7 @@ class_module(channel_interceptor) -> rabbit_channel_interceptor.
 %%---------------------------------------------------------------------------
 
 init([]) ->
+		%% 建立命名非公开的ets表
     ?ETS_NAME = ets:new(?ETS_NAME, [protected, set, named_table]),
     {ok, none}.
 
