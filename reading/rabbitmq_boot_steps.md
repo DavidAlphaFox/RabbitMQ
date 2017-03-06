@@ -14,10 +14,10 @@ RabbitMQ使用有向图进行依赖启动，是有以下几个考虑。
 
 # 是如何完成的
 RabbitMQ使用Erlang中module_info函数来获得模块的所有attributes，并通过遍历的方式
-过滤所关心的attribute。
+过滤所关心的attribute。	
 这些特殊的attribute就是我们所熟知的rabbit_boot_step。通过rabbit_boot_step，我们
-可以定义启动过程的MFA和前置步骤和准许的步骤。
+可以定义启动过程的MFA和前置步骤和准许的步骤。	
 RabbitMQ为了方便定义，定义了几个核心步骤，我们可以从上面的图中看的一清二楚。
-当我们有了这些启动步骤后，RabbitMQ使用digraph这个函数库构建了有向图，并使用广度
+我们有了这些启动步骤后，RabbitMQ使用digraph这个函数库构建了有向图，并使用广度
 优先算法，生成了所有的启动顺序，这样RabbitMQ就完成了启动流程的构建，完成了真正启
 动的准备。
