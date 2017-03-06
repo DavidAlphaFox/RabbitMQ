@@ -303,7 +303,7 @@ start() ->
 										 %% 确保日志被正确打开
                      ok = ensure_working_log_handlers(),
 										 %% 准备集群的状态文件
-										 %% 准备集群所有执行中结点的文件
+										 %% 准备集群所有执行中节点的文件
                      rabbit_node_monitor:prepare_cluster_status_files(),
 										 %% 检查mnesia集群的一致性
                      rabbit_mnesia:check_cluster_consistency(),
@@ -341,28 +341,30 @@ start_it(StartFun) ->
 		%% 将哨位进程注册为rabbit_boot命名进程
     case catch register(rabbit_boot, Marker) of
 				%% 注册成功了
-        true -> try
-										%% 当前结点上的rabbit进程还在执行
-                    case is_running() of
-                        true  -> ok;
-												%% 没在执行，那么就需要执行启动函数
-                        false -> StartFun()
-                    end
-                catch
-                    throw:{could_not_start, _App, _Reason}=Err ->
-                        boot_error(Err, not_available);
-                    _:Reason ->
-                        boot_error(Reason, erlang:get_stacktrace())
-                after
-										%% 当启动不管成功失败
-										%% 最后都要让哨位进程rabbit_boot退出
-                    unlink(Marker),
-                    Marker ! stop,
-                    %% give the error loggers some time to catch up
-                    timer:sleep(100)
-                end;
-        _    -> unlink(Marker),
-                Marker ! stop
+        true -> 
+						try
+								%% 当前结点上的rabbit进程还在执行
+								case is_running() of
+										true  -> ok;
+										%% 没在执行，那么就需要执行启动函数
+										false -> StartFun()
+								end
+						catch
+								throw:{could_not_start, _App, _Reason}=Err ->
+										boot_error(Err, not_available);
+								_:Reason ->
+										boot_error(Reason, erlang:get_stacktrace())
+						after
+								%% 当启动不管成功失败
+								%% 最后都要让哨位进程rabbit_boot退出
+								unlink(Marker),
+								Marker ! stop,
+								%% give the error loggers some time to catch up
+								timer:sleep(100)
+						end;
+        _    -> 
+						unlink(Marker),
+						Marker ! stop
     end.
 
 stop() ->
@@ -432,14 +434,15 @@ await_startup(HaveSeenRabbitBoot) ->
 		%% rabbit_boot进程，并非一开始就使用命名启动的，而是先启动进程再注册名字
 		%% 因为并发的关系，我们需要再次确认rabbit_boot进程
     case whereis(rabbit_boot) of
-				%% 进程不存在了，但是之前看到了rabbit_boot进程或现在正在执行
+				%% 进程不存在了，但是之前看到了rabbit_boot进程或现在rabbit进程正在执行
+				%% 确保启动完成再进行其它操作
         undefined -> case HaveSeenRabbitBoot orelse is_running() of
                          true  -> ok;
                          false -> timer:sleep(100),
                                   await_startup(false)
                      end;
 				%% 进程存在，继续运行
-				%% 值打rabbit_boot退出了，才能退出该函数
+				%% rabbit_boot退出了，才能退出该函数
         _         -> timer:sleep(100),
                      await_startup(true)
     end.
