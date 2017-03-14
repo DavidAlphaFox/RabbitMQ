@@ -341,7 +341,7 @@ start_it(StartFun) ->
 		%% 将哨位进程注册为rabbit_boot命名进程
     case catch register(rabbit_boot, Marker) of
 				%% 注册成功了
-        true -> 
+        true ->
 						try
 								%% 当前结点上的rabbit进程还在执行
 								case is_running() of
@@ -362,7 +362,7 @@ start_it(StartFun) ->
 								%% give the error loggers some time to catch up
 								timer:sleep(100)
 						end;
-        _    -> 
+        _    ->
 						unlink(Marker),
 						Marker ! stop
     end.
@@ -372,7 +372,7 @@ stop() ->
 				%% 不存在了，可以直接进入退出过程
         undefined -> ok;
 				%% 进程存在了
-        _         -> await_startup(true)
+        _ -> await_startup(true)
     end,
     rabbit_log:info("Stopping RabbitMQ~n", []),
 		%% 得到包括插件再内，所有活跃的应用
